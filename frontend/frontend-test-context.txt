@@ -1,0 +1,4182 @@
+
+
+========== package.json ==========
+
+{
+  "name": "pedia-centre-frontend",
+  "version": "0.0.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test"
+  },
+  "private": true,
+  "packageManager": "npm@11.11.0",
+  "dependencies": {
+    "@angular/common": "^21.2.0",
+    "@angular/compiler": "^21.2.0",
+    "@angular/core": "^21.2.0",
+    "@angular/forms": "^21.2.0",
+    "@angular/platform-browser": "^21.2.0",
+    "@angular/router": "^21.2.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^21.2.29",
+    "@angular/cli": "^21.2.29",
+    "@angular/compiler-cli": "^21.2.0",
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^26.6.6",
+    "jsdom": "^28.0.0",
+    "prettier": "^3.8.1",
+    "typescript": "~5.9.2",
+    "vitest": "^4.0.8"
+  }
+}
+
+
+
+========== playwright.config.ts ==========
+
+
+import { defineConfig, devices } from '@playwright/test';
+
+export default defineConfig({
+  testDir: './tests',
+
+  fullyParallel: false,
+
+  forbidOnly: !!process.env.CI,
+
+  retries: process.env.CI ? 2 : 0,
+
+  workers: process.env.CI ? 1 : undefined,
+
+  reporter: [
+    ['list'],
+    ['html', { open: 'never' }],
+  ],
+
+  use: {
+    baseURL: 'http://localhost:4200',
+
+    trace: 'retain-on-failure',
+
+    screenshot: 'only-on-failure',
+
+    video: 'retain-on-failure',
+
+    ...devices['Desktop Chrome'],
+  },
+
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
+
+  webServer: {
+    command: 'npm start',
+    url: 'http://localhost:4200',
+    reuseExistingServer: !process.env.CI,
+    timeout: 120 * 1000,
+  },
+});
+
+
+
+========== angular.json ==========
+
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "cli": {
+    "packageManager": "npm",
+    "analytics": "78272fd6-cef9-45e4-af0f-0ceab46ec00c"
+  },
+  "newProjectRoot": "projects",
+  "projects": {
+    "pedia-centre-frontend": {
+      "projectType": "application",
+      "schematics": {
+        "@schematics/angular:component": {
+          "style": "scss"
+        }
+      },
+      "root": "",
+      "sourceRoot": "src",
+      "prefix": "app",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "src/main.ts",
+            "tsConfig": "tsconfig.app.json",
+            "inlineStyleLanguage": "scss",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "public"
+              }
+            ],
+            "styles": [
+              "src/styles.scss"
+            ]
+          },
+          "configurations": {
+            "production": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kB",
+                  "maximumError": "1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "4kB",
+                  "maximumError": "8kB"
+                }
+              ],
+              "outputHashing": "all"
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "configurations": {
+            "production": {
+              "buildTarget": "pedia-centre-frontend:build:production"
+            },
+            "development": {
+              "buildTarget": "pedia-centre-frontend:build:development"
+            }
+          },
+          "defaultConfiguration": "development"
+        },
+        "test": {
+          "builder": "@angular/build:unit-test"
+        }
+      }
+    }
+  }
+}
+
+
+
+========== src\app\app.routes.ts ==========
+
+import { Routes } from '@angular/router';
+import { passwordChangedGuard, roleGuard } from './core/role.guard';
+
+const home = () => import('./shell/home').then((m) => m.Home);
+
+export const routes: Routes = [
+  { path: '', pathMatch: 'full', redirectTo: 'login' },
+  { path: 'login', loadComponent: () => import('./auth/login/login').then((m) => m.Login) },
+  { path: 'register', loadComponent: () => import('./auth/register/register').then((m) => m.Register) },
+
+  {
+    path: 'guardian',
+    canActivate: [roleGuard('guardian')],
+    loadComponent: () => import('./parent/parent-layout').then((m) => m.ParentLayout),
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'find-doctor' },
+      { path: 'find-doctor', loadComponent: () => import('./parent/find-doctor').then((m) => m.FindDoctors) },
+      { path: 'book/:doctorId', loadComponent: () => import('./parent/book-appointment').then((m) => m.BookAppointment) },
+      { path: 'my-appointments', loadComponent: () => import('./parent/my-appointments').then((m) => m.MyAppointments) },
+      { path: 'treatment-history', loadComponent: () => import('./parent/treatment-history').then((m) => m.TreatmentHistory) },
+    ],
+  },
+
+  {
+    path: 'doctor',
+    canActivate: [roleGuard('doctor')],
+    loadComponent: () => import('./doctors/doctor-layout').then((m) => m.DoctorLayout),
+    children: [
+      { path: 'change-password', loadComponent: () => import('./doctors/change-password').then((m) => m.ChangePassword) },
+      {
+        path: '',
+        canActivate: [passwordChangedGuard],
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'schedule' },
+          { path: 'schedule', loadComponent: () => import('./doctors/schedule').then((m) => m.Schedule) },
+          { path: 'patients', loadComponent: () => import('./doctors/my-patients').then((m) => m.MyPatients) },
+          { path: 'patients/:patientId', loadComponent: () => import('./doctors/patient-history').then((m) => m.PatientHistory) },
+          { path: 'patients/:patientId/add-record', loadComponent: () => import('./doctors/add-record').then((m) => m.AddRecord) },
+        ],
+      },
+    ],
+  },
+
+    {
+    path: 'admin',
+    canActivate: [roleGuard('admin')],
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'doctors' },
+      {
+        path: 'doctors',
+        loadComponent: () => import('./admin/manage-doctors').then((m) => m.ManageDoctors),
+      },
+      {
+        path: 'doctors/new',
+        loadComponent: () => import('./admin/add-doctor').then((m) => m.AddDoctor),
+      },
+      {
+        path: 'doctors/:doctorId/availability',
+        redirectTo: '/admin/doctors',
+      },
+      {
+        path: 'patients',
+        loadComponent: () => import('./admin/manage-patients').then((m) => m.ManagePatients),
+      },
+      {
+        path: 'users',
+        loadComponent: () => import('./admin/manage-users').then((m) => m.ManageUsers),
+      },
+    ],
+  },
+  { path: '**', redirectTo: 'login' },
+];
+
+
+========== src\app\core\auth.service.ts ==========
+
+import { HttpClient } from '@angular/common/http';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
+import { map } from 'rxjs';
+import { API_URL } from './config';
+import {
+  AuthTokenResponse,
+  DoctorTokenResponse,
+  RegistrationRequest,
+  RegistrationResponse,
+  Role,
+} from './models';
+
+export interface Session {
+  token: string;
+  role: Role;
+  userId: number;
+  name?: string;
+  mustChangePassword?: boolean;
+}
+
+const STORAGE_KEY = 'pc_session';
+
+@Injectable({ providedIn: 'root' })
+export class AuthService {
+  private http = inject(HttpClient);
+  private router = inject(Router);
+
+  private _session = signal<Session | null>(this.restore());
+  readonly session = this._session.asReadonly();
+  readonly role = computed(() => this._session()?.role ?? null);
+
+  get token(): string | null {
+    return this._session()?.token ?? null;
+  }
+
+  loginGuardian(mobile: string, password: string) {
+    return this.http
+      .post<AuthTokenResponse>(`${API_URL}/auth/login`, { mobile_number: mobile, password })
+      .pipe(map((r) => this.start(r.access_token, 'guardian')));
+  }
+
+  loginDoctor(staffId: string, password: string) {
+    return this.http
+      .post<DoctorTokenResponse>(`${API_URL}/auth/doctor-login`, { staff_id: staffId, password })
+      .pipe(
+        map((r) =>
+          this.start(r.access_token, 'doctor', {
+            name: r.doctor_name,
+            mustChangePassword: r.must_change_password,
+          }),
+        ),
+      );
+  }
+
+ loginAdmin(username: string, password: string) {
+  debugger;
+
+  return this.http
+    .post<AuthTokenResponse>(
+      `${API_URL}/auth/admin-login`,
+      { username, password }
+    )
+    .pipe(
+      map((r) => {
+        debugger;
+        console.log('Admin login response:', r);
+        console.log('Access token:', r.access_token);
+        return this.start(r.access_token, 'admin');
+      })
+    );
+}
+
+    register(payload: RegistrationRequest) {
+    return this.http.post<RegistrationResponse>(`${API_URL}/registration`, payload);
+  }
+    markPasswordChanged() {
+    const s = this._session();
+    if (!s) return;
+    const updated = { ...s, mustChangePassword: false };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    this._session.set(updated);
+  }
+
+  logout() {
+    localStorage.removeItem(STORAGE_KEY);
+    this._session.set(null);
+    this.router.navigate(['/login']);
+  }
+
+  private start(token: string, role: Role, extra: Partial<Session> = {}): Session {
+    const claims = this.decode(token);
+    const session: Session = { token, role, userId: Number(claims?.sub), ...extra };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    this._session.set(session);
+    return session;
+  }
+
+  private restore(): Session | null {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const session: Session = JSON.parse(raw);
+      const exp = this.decode(session.token)?.exp;
+      if (exp && exp * 1000 < Date.now()) {
+        localStorage.removeItem(STORAGE_KEY);
+        return null;
+      }
+      return session;
+    } catch {
+      return null;
+    }
+  }
+
+  private decode(token: string): { sub?: string; exp?: number } | null {
+    try {
+      const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(atob(payload));
+    } catch {
+      return null;
+    }
+  }
+}
+
+
+
+========== src\app\core\role.guard.ts ==========
+
+import { inject } from '@angular/core';
+import { CanActivateFn, Router } from '@angular/router';
+import { AuthService } from './auth.service';
+import { Role } from './models';
+
+export const roleGuard =
+  (role: Role): CanActivateFn =>
+  () => {
+    const auth = inject(AuthService);
+    const router = inject(Router);
+    return auth.role() === role ? true : router.createUrlTree(['/login']);
+  };
+  export const passwordChangedGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  return auth.session()?.mustChangePassword
+    ? router.createUrlTree(['/doctor/change-password'])
+    : true;
+};
+
+
+========== src\app\core\models.ts ==========
+
+export type Role = 'guardian' | 'doctor' | 'admin';
+
+export interface AuthTokenResponse {
+  access_token: string;
+  token_type: string;
+}
+
+export interface DoctorTokenResponse extends AuthTokenResponse {
+  must_change_password: boolean;
+  doctor_name: string;
+}
+
+export interface GuardianProfile {
+  guardian_id: number;
+  first_name: string;
+  last_name: string;
+  mobile_number: string;
+  role: string;
+}
+
+export interface DoctorProfile {
+  doctor_id: number;
+  staff_id: string;
+  first_name: string;
+  last_name: string;
+  specialty: string;
+  registration_no: string;
+  must_change_password: boolean;
+}
+export interface ChildCreateRequest {
+  first_name: string;
+  last_name: string;
+  date_of_birth: string; // YYYY-MM-DD
+  gender: string;
+  abha_id: string | null;
+  aadhaar_number: string | null;
+  blood_group: string | null;
+  known_allergies: string | null;
+  existing_conditions: string | null;
+  current_medications: string | null;
+  immunization_status: string | null;
+  referred_by: string | null;
+}
+
+export interface RegistrationRequest {
+  first_name: string;
+  last_name: string;
+  relationship_to_child: string;
+  mobile_number: string;
+  email: string | null;
+  password: string;
+  address_line1: string;
+  address_line2: string | null;
+  city: string;
+  state: string;
+  pincode: string;
+  preferred_language: string | null;
+  terms_accepted: boolean;
+  health_data_consent: boolean;
+  children: ChildCreateRequest[];
+}
+
+export interface RegistrationResponse {
+  guardian_id: number;
+  patients: { patient_id: number; mrn: string; first_name: string }[];
+  message: string;
+}
+export interface DoctorPublic {
+  doctor_id: number;
+  first_name: string;
+  last_name: string;
+  qualification: string;
+  specialty: string;
+  experience_years: number;
+  languages: string | null;
+  consultation_fee: number;
+  available_days: string | null;
+}
+
+export interface SpecialtyCount {
+  specialty: string;
+  doctor_count: number;
+}
+
+export interface SlotsResponse {
+  doctor_id: number;
+  doctor_name: string;
+  date: string;
+  day_of_week: number;
+  slots: string[]; // "HH:MM"
+}
+
+export interface PatientSummary {
+  patient_id: number;
+  mrn: string;
+  first_name: string;
+  last_name: string;
+  date_of_birth: string;
+  gender: string;
+  blood_group: string | null;
+  guardian_name: string;
+  guardian_mobile: string;
+}
+
+export interface Appointment {
+  appointment_id: number;
+  appointment_ref: string;
+  doctor_id: number;
+  doctor_name: string;
+  patient_id: number;
+  patient_name: string;
+  mrn: string;
+  scheduled_at: string;
+  duration_minutes: number;
+  status: string;
+  reason_for_visit: string | null;
+}
+
+export interface BookingRequest {
+  doctor_id: number;
+  patient_id: number;
+  scheduled_at: string; // "YYYY-MM-DDTHH:MM:00"
+  reason_for_visit: string | null;
+}
+export interface Medication {
+  medication_name: string;
+  dosage: string | null;
+  frequency: string | null;
+  duration: string | null;
+  instructions: string | null;
+}
+
+export interface TreatmentRecord {
+  treatment_record_id: number;
+  patient_id: number;
+  patient_name: string;
+  doctor_id: number;
+  doctor_name: string;
+  appointment_id: number | null;
+  visit_date: string;
+  diagnosis: string;
+  medications: Medication[];
+  treatment_plan: string | null;
+  follow_up_date: string | null;
+  clinical_notes: string | null;
+  record_status: string;
+  created_at: string;
+}
+export interface TreatmentRecordRequest {
+  patient_id: number;
+  appointment_id: number | null;
+  visit_date: string;
+  diagnosis: string;
+  medications: Medication[];
+  treatment_plan: string | null;
+  follow_up_date: string | null;
+  clinical_notes: string | null;
+}
+export interface DoctorSummary {
+  doctor_id: number;
+  staff_id: string;
+  first_name: string;
+  last_name: string;
+  qualification: string;
+  specialty: string;
+  experience_years: number;
+  languages: string | null;
+  consultation_fee: number;
+  available_days: string | null;
+}
+
+export interface DoctorCreateRequest {
+  first_name: string;
+  last_name: string;
+  registration_no: string;
+  qualification: string;
+  specialty: string;
+  experience_years: number;
+  languages: string | null;
+  consultation_fee: number;
+  available_days: string | null;
+  mobile_number: string | null;
+  email: string | null;
+  temporary_password: string;
+}
+
+export interface DoctorCreateResponse {
+  doctor_id: number;
+  staff_id: string;
+  first_name: string;
+  last_name: string;
+  specialty: string;
+  message: string;
+}
+
+export interface Availability {
+  availability_id: number;
+  doctor_id: number;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  slot_minutes: number;
+}
+
+export interface AvailabilityRequest {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  slot_minutes: number;
+}
+
+export interface PageResult<T> {
+  total: number;
+  page: number;
+  page_size: number;
+  items: T[];
+}
+
+export interface UserRow {
+  user_id: number;
+  username: string;
+  user_type: string;
+  first_name: string | null;
+  last_name: string | null;
+  is_active?: boolean | null;
+}
+
+export interface UserCreateRequest {
+  username: string;
+  password: string;
+  user_type: string;
+  first_name: string | null;
+  last_name: string | null;
+}
+
+export interface AssignmentResponse {
+  message: string;
+  patient_id: number;
+  patient_name: string;
+  doctor_id: number;
+  doctor_name: string;
+  assignment_date: string;
+}
+
+
+========== src\app\core\config.ts ==========
+
+export const API_URL = 'http://127.0.0.1:8000/api/v1';
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\app.config.ts ==========
+
+import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
+import { provideRouter } from '@angular/router';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
+
+import { routes } from './app.routes';
+import { authInterceptor } from './core/auth.interceptor';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideBrowserGlobalErrorListeners(),
+    provideRouter(routes),
+    provideHttpClient( withInterceptors([authInterceptor])),
+  ],
+};
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\app.html ==========
+
+<router-outlet />
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\app.routes.ts ==========
+
+import { Routes } from '@angular/router';
+import { passwordChangedGuard, roleGuard } from './core/role.guard';
+
+const home = () => import('./shell/home').then((m) => m.Home);
+
+export const routes: Routes = [
+  { path: '', pathMatch: 'full', redirectTo: 'login' },
+  { path: 'login', loadComponent: () => import('./auth/login/login').then((m) => m.Login) },
+  { path: 'register', loadComponent: () => import('./auth/register/register').then((m) => m.Register) },
+
+  {
+    path: 'guardian',
+    canActivate: [roleGuard('guardian')],
+    loadComponent: () => import('./parent/parent-layout').then((m) => m.ParentLayout),
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'find-doctor' },
+      { path: 'find-doctor', loadComponent: () => import('./parent/find-doctor').then((m) => m.FindDoctors) },
+      { path: 'book/:doctorId', loadComponent: () => import('./parent/book-appointment').then((m) => m.BookAppointment) },
+      { path: 'my-appointments', loadComponent: () => import('./parent/my-appointments').then((m) => m.MyAppointments) },
+      { path: 'treatment-history', loadComponent: () => import('./parent/treatment-history').then((m) => m.TreatmentHistory) },
+    ],
+  },
+
+  {
+    path: 'doctor',
+    canActivate: [roleGuard('doctor')],
+    loadComponent: () => import('./doctors/doctor-layout').then((m) => m.DoctorLayout),
+    children: [
+      { path: 'change-password', loadComponent: () => import('./doctors/change-password').then((m) => m.ChangePassword) },
+      {
+        path: '',
+        canActivate: [passwordChangedGuard],
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'schedule' },
+          { path: 'schedule', loadComponent: () => import('./doctors/schedule').then((m) => m.Schedule) },
+          { path: 'patients', loadComponent: () => import('./doctors/my-patients').then((m) => m.MyPatients) },
+          { path: 'patients/:patientId', loadComponent: () => import('./doctors/patient-history').then((m) => m.PatientHistory) },
+          { path: 'patients/:patientId/add-record', loadComponent: () => import('./doctors/add-record').then((m) => m.AddRecord) },
+        ],
+      },
+    ],
+  },
+
+    {
+    path: 'admin',
+    canActivate: [roleGuard('admin')],
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'doctors' },
+      {
+        path: 'doctors',
+        loadComponent: () => import('./admin/manage-doctors').then((m) => m.ManageDoctors),
+      },
+      {
+        path: 'doctors/new',
+        loadComponent: () => import('./admin/add-doctor').then((m) => m.AddDoctor),
+      },
+      {
+        path: 'doctors/:doctorId/availability',
+        redirectTo: '/admin/doctors',
+      },
+      {
+        path: 'patients',
+        loadComponent: () => import('./admin/manage-patients').then((m) => m.ManagePatients),
+      },
+      {
+        path: 'users',
+        loadComponent: () => import('./admin/manage-users').then((m) => m.ManageUsers),
+      },
+    ],
+  },
+  { path: '**', redirectTo: 'login' },
+];
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\app.spec.ts ==========
+
+import { TestBed } from '@angular/core/testing';
+import { App } from './app';
+
+describe('App', () => {
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [App],
+    }).compileComponents();
+  });
+
+  it('should create the app', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    expect(app).toBeTruthy();
+  });
+
+  it('should render title', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('h1')?.textContent).toContain('Hello, pedia-centre-frontend');
+  });
+});
+
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\app.ts ==========
+
+import { Component, signal } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
+
+@Component({
+  selector: 'app-root',
+  imports: [RouterOutlet],
+  templateUrl: './app.html',
+  styleUrl: './app.scss'
+})
+export class App {
+  protected readonly title = signal('pedia-centre-frontend');
+}
+
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\admin\add-doctor.ts ==========
+
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, inject, signal } from '@angular/core';
+import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { AdminApi } from '../core/admin-api.service';
+import { errorMessage } from '../core/error-message';
+import { DoctorCreateResponse } from '../core/models';
+
+interface Field {
+  key: string;
+  label: string;
+  type?: string;
+}
+
+@Component({
+  selector: 'app-add-doctor',
+  imports: [ReactiveFormsModule, RouterLink],
+  template: `
+    <a class="back" routerLink="/admin/doctors">← Back to doctors</a>
+
+    @if (created(); as c) {
+      <section class="card">
+        <h1>Doctor created</h1>
+        <p>Dr. {{ c.first_name }} {{ c.last_name }} ({{ c.specialty }})</p>
+        <p>Staff ID: <strong>{{ c.staff_id }}</strong></p>
+        <p class="muted">
+          Share the staff ID and the temporary password with the doctor. They will be asked to change it on first login.
+        </p>
+        <div class="row">
+          <a class="primary" [routerLink]="['/admin/doctors', c.doctor_id, 'availability']">Set availability</a>
+          <button type="button" class="secondary" (click)="created.set(null)">Add another</button>
+        </div>
+      </section>
+    } @else {
+      <h1>Add a doctor</h1>
+      <form class="card" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <div class="grid">
+          @for (f of fields; track f.key) {
+            <label>
+              {{ f.label }}
+              <input [type]="f.type ?? 'text'" [formControlName]="f.key" />
+              @if (form.get(f.key)?.touched && form.get(f.key)?.invalid) {
+                <small class="err">Invalid or missing value</small>
+              }
+            </label>
+          }
+        </div>
+
+        @if (error()) {
+          <p class="err">{{ error() }}</p>
+        }
+
+        <button class="primary wide" type="submit" [disabled]="saving()">
+          {{ saving() ? 'Creating…' : 'Create doctor' }}
+        </button>
+      </form>
+    }
+  `,
+  styles: `
+    .back { display: inline-block; margin-bottom: .75rem; color: #4b3a8a; text-decoration: none; }
+    h1 { margin: 0 0 1rem; color: #4b3a8a; }
+    .card { padding: 1.5rem; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgb(0 0 0 / 6%); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .85rem 1rem; }
+    label { display: block; font-size: .9rem; }
+    input { width: 100%; box-sizing: border-box; margin-top: .25rem; padding: .6rem; border: 1px solid #d6d0ea; border-radius: 8px; }
+    .primary { display: inline-block; padding: .65rem 1.2rem; border: 0; border-radius: 8px; background: #4b3a8a; color: #fff; text-decoration: none; cursor: pointer; text-align: center; }
+    .primary:disabled { opacity: .5; cursor: not-allowed; }
+    .wide { width: 100%; box-sizing: border-box; margin-top: 1.25rem; }
+    .secondary { padding: .65rem 1.2rem; border: 1px solid #4b3a8a; background: #fff; color: #4b3a8a; border-radius: 8px; cursor: pointer; }
+    .row { display: flex; gap: .75rem; margin-top: 1rem; flex-wrap: wrap; }
+    .muted { color: #6b6785; }
+    .err { color: #b3261e; font-size: .85rem; }
+  `,
+})
+export class AddDoctor {
+  private fb = inject(NonNullableFormBuilder);
+  private api = inject(AdminApi);
+
+  saving = signal(false);
+  error = signal<string | null>(null);
+  created = signal<DoctorCreateResponse | null>(null);
+
+  fields: Field[] = [
+    { key: 'first_name', label: 'First name' },
+    { key: 'last_name', label: 'Last name' },
+    { key: 'registration_no', label: 'Registration number' },
+    { key: 'qualification', label: 'Qualification (e.g. MBBS, MD)' },
+    { key: 'specialty', label: 'Specialty' },
+    { key: 'experience_years', label: 'Experience (years)', type: 'number' },
+    { key: 'consultation_fee', label: 'Consultation fee (₹)', type: 'number' },
+    { key: 'languages', label: 'Languages (optional)' },
+    { key: 'available_days', label: 'Available days (optional, e.g. Mon,Tue,Wed)' },
+    { key: 'mobile_number', label: 'Mobile number (optional)', type: 'tel' },
+    { key: 'email', label: 'Email (optional)', type: 'email' },
+    { key: 'temporary_password', label: 'Temporary password (minimum 8 characters)' },
+  ];
+
+  form = this.fb.group({
+    first_name: ['', [Validators.required, Validators.maxLength(50)]],
+    last_name: ['', [Validators.required, Validators.maxLength(50)]],
+    registration_no: ['', [Validators.required, Validators.maxLength(30)]],
+    qualification: ['', [Validators.required, Validators.maxLength(150)]],
+    specialty: ['', [Validators.required, Validators.maxLength(60)]],
+    experience_years: [0, [Validators.required, Validators.min(0), Validators.max(70)]],
+    consultation_fee: [0, [Validators.required, Validators.min(0)]],
+    languages: ['', Validators.maxLength(100)],
+    available_days: ['', Validators.maxLength(60)],
+    mobile_number: ['', Validators.pattern(/^[6-9]\d{9}$/)],
+    email: ['', Validators.email],
+    temporary_password: ['', [Validators.required, Validators.minLength(8)]],
+  });
+
+  submit() {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      this.error.set('Please fix the highlighted fields.');
+      return;
+    }
+
+    const v = this.form.getRawValue();
+    const orNull = (s: string) => (s && s.trim() ? s.trim() : null);
+
+    this.saving.set(true);
+    this.error.set(null);
+
+    this.api
+      .createDoctor({
+        first_name: v.first_name.trim(),
+        last_name: v.last_name.trim(),
+        registration_no: v.registration_no.trim(),
+        qualification: v.qualification.trim(),
+        specialty: v.specialty.trim(),
+        experience_years: Number(v.experience_years),
+        consultation_fee: Number(v.consultation_fee),
+        languages: orNull(v.languages),
+        available_days: orNull(v.available_days),
+        mobile_number: orNull(v.mobile_number),
+        email: orNull(v.email),
+        temporary_password: v.temporary_password,
+      })
+      .subscribe({
+        next: (res) => {
+          this.saving.set(false);
+          this.created.set(res);
+          this.form.reset();
+        },
+        error: (e: HttpErrorResponse) => {
+          this.saving.set(false);
+          this.error.set(errorMessage(e, 'Could not create the doctor.'));
+        },
+      });
+  }
+}
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\admin\admin-layout.ts ==========
+
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\admin\doctor-avaibility.ts ==========
+
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\admin\manage-doctors.ts ==========
+
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { AdminApi } from '../core/admin-api.service';
+import { errorMessage } from '../core/error-message';
+import { DoctorSummary } from '../core/models';
+
+@Component({
+  selector: 'app-manage-doctors',
+  imports: [RouterLink],
+  template: `
+    <div class="head">
+      <h1>Doctors</h1>
+      <a class="primary" routerLink="/admin/doctors/new">+ Add doctor</a>
+    </div>
+
+    <div class="searchbar">
+      <input #q type="search" placeholder="Search by name or specialty" (keyup.enter)="load(q.value)" />
+      <button type="button" class="secondary" (click)="load(q.value)">Search</button>
+    </div>
+
+    @if (error()) {
+      <p class="err">{{ error() }}</p>
+    }
+
+    @if (loading()) {
+      <p class="muted">Loading…</p>
+    } @else {
+      <p class="muted">{{ doctors().length }} doctor(s)</p>
+      <div class="list">
+        @for (d of doctors(); track d.doctor_id) {
+          <article class="card">
+            <div class="info">
+              <h2>Dr. {{ d.first_name }} {{ d.last_name }} <span class="muted">({{ d.staff_id }})</span></h2>
+              <p class="sub">{{ d.specialty }} · {{ d.qualification }}</p>
+              <p>{{ d.experience_years }} years · ₹{{ d.consultation_fee }}</p>
+              @if (d.languages) { <p class="muted">Languages: {{ d.languages }}</p> }
+              @if (d.available_days) { <p class="muted">Days: {{ d.available_days }}</p> }
+            </div>
+            <a class="secondary" [routerLink]="['/admin/doctors', d.doctor_id, 'availability']">
+              Set availability
+            </a>
+          </article>
+        } @empty {
+          <div class="card"><p class="muted">No doctors found.</p></div>
+        }
+      </div>
+    }
+  `,
+  styles: `
+    .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    h1 { margin: 0; color: #4b3a8a; }
+    .searchbar { display: flex; gap: .5rem; margin-bottom: .75rem; }
+    .searchbar input { flex: 1; padding: .6rem; border: 1px solid #d6d0ea; border-radius: 8px; }
+    .primary { padding: .5rem 1rem; border-radius: 8px; background: #4b3a8a; color: #fff; text-decoration: none; }
+    .secondary { padding: .5rem 1rem; border: 1px solid #4b3a8a; background: #fff; color: #4b3a8a; border-radius: 8px; text-decoration: none; cursor: pointer; }
+    .list { display: grid; gap: .75rem; }
+    .card { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem 1.25rem; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgb(0 0 0 / 6%); }
+    .card h2 { margin: 0; font-size: 1.05rem; }
+    .card p { margin: .2rem 0; font-size: .9rem; }
+    .sub { color: #4b3a8a; font-weight: 600; }
+    .muted { color: #6b6785; }
+    .err { color: #b3261e; }
+    @media (max-width: 600px) { .card { flex-direction: column; align-items: flex-start; } }
+  `,
+})
+export class ManageDoctors implements OnInit {
+  private api = inject(AdminApi);
+
+  doctors = signal<DoctorSummary[]>([]);
+  loading = signal(false);
+  error = signal<string | null>(null);
+
+  ngOnInit() {
+    this.load('');
+  }
+
+  load(search: string) {
+    this.loading.set(true);
+    this.error.set(null);
+    this.api.doctors(search).subscribe({
+      next: (rows) => {
+        this.doctors.set(rows);
+        this.loading.set(false);
+      },
+      error: (e: HttpErrorResponse) => {
+        this.loading.set(false);
+        this.error.set(errorMessage(e, 'Could not load doctors.'));
+      },
+    });
+  }
+}
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\admin\manage-patients.ts ==========
+
+import { DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { AdminApi } from '../core/admin-api.service';
+import { errorMessage } from '../core/error-message';
+import { DoctorSummary, PatientSummary } from '../core/models';
+
+@Component({
+  selector: 'app-manage-patients',
+  imports: [DatePipe],
+  template: `
+    <h1>Patients</h1>
+
+    <div class="searchbar">
+      <input #q type="search" placeholder="Search by name, MRN or guardian mobile" (keyup.enter)="search(q.value)" />
+      <button type="button" class="secondary" (click)="search(q.value)">Search</button>
+    </div>
+
+    @if (error()) { <p class="err">{{ error() }}</p> }
+    @if (message()) { <p class="ok">{{ message() }}</p> }
+
+    @if (loading()) {
+      <p class="muted">Loading…</p>
+    } @else {
+      <p class="muted">{{ total() }} patient(s) · page {{ page() }} of {{ totalPages() }}</p>
+      <div class="list">
+        @for (p of patients(); track p.patient_id) {
+          <article class="card">
+            <div class="info">
+              <h2>{{ p.first_name }} {{ p.last_name }} <span class="muted">({{ p.mrn }})</span></h2>
+              <p>{{ p.gender }} · Born {{ p.date_of_birth | date: 'd MMM y' }}</p>
+              <p class="muted">Guardian: {{ p.guardian_name }} · {{ p.guardian_mobile }}</p>
+            </div>
+
+            @if (assigning() === p.patient_id) {
+              <div class="assign">
+                <select #d>
+                  <option value="">Choose a doctor</option>
+                  @for (doc of doctors(); track doc.doctor_id) {
+                    <option [value]="doc.doctor_id">Dr. {{ doc.first_name }} {{ doc.last_name }} ({{ doc.specialty }})</option>
+                  }
+                </select>
+                <button type="button" class="primary" [disabled]="!d.value" (click)="assign(p, d.value)">Assign</button>
+                <button type="button" class="secondary" (click)="assigning.set(null)">Cancel</button>
+              </div>
+            } @else {
+              <button type="button" class="secondary" (click)="assigning.set(p.patient_id)">Assign doctor</button>
+            }
+          </article>
+        } @empty {
+          <div class="card"><p class="muted">No patients found.</p></div>
+        }
+      </div>
+
+      <div class="pager">
+        <button type="button" class="secondary" [disabled]="page() <= 1" (click)="go(page() - 1)">Previous</button>
+        <button type="button" class="secondary" [disabled]="page() >= totalPages()" (click)="go(page() + 1)">Next</button>
+      </div>
+    }
+  `,
+  styles: `
+    h1 { margin: 0 0 1rem; color: #4b3a8a; }
+    .searchbar { display: flex; gap: .5rem; margin-bottom: .75rem; }
+    .searchbar input { flex: 1; padding: .6rem; border: 1px solid #d6d0ea; border-radius: 8px; }
+    .list { display: grid; gap: .75rem; }
+    .card { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem 1.25rem; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgb(0 0 0 / 6%); }
+    .card h2 { margin: 0; font-size: 1.05rem; }
+    .card p { margin: .2rem 0; font-size: .9rem; }
+    .assign { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+    .assign select { padding: .5rem; border: 1px solid #d6d0ea; border-radius: 8px; max-width: 260px; }
+    .primary { padding: .5rem 1rem; border: 0; border-radius: 8px; background: #4b3a8a; color: #fff; cursor: pointer; }
+    .primary:disabled { opacity: .5; cursor: not-allowed; }
+    .secondary { padding: .5rem 1rem; border: 1px solid #4b3a8a; background: #fff; color: #4b3a8a; border-radius: 8px; cursor: pointer; }
+    .secondary:disabled { opacity: .5; cursor: not-allowed; }
+    .pager { display: flex; justify-content: center; gap: .75rem; margin-top: 1rem; }
+    .muted { color: #6b6785; }
+    .err { color: #b3261e; }
+    .ok { color: #1b7f3b; }
+    @media (max-width: 700px) { .card { flex-direction: column; align-items: flex-start; } }
+  `,
+})
+export class ManagePatients implements OnInit {
+  private api = inject(AdminApi);
+  private pageSize = 10;
+  private query = '';
+
+  patients = signal<PatientSummary[]>([]);
+  doctors = signal<DoctorSummary[]>([]);
+  page = signal(1);
+  total = signal(0);
+  totalPages = computed(() => Math.max(1, Math.ceil(this.total() / this.pageSize)));
+
+  loading = signal(false);
+  error = signal<string | null>(null);
+  message = signal<string | null>(null);
+  assigning = signal<number | null>(null);
+
+  ngOnInit() {
+    this.api.doctors().subscribe({ next: (rows) => this.doctors.set(rows), error: () => {} });
+    this.load();
+  }
+
+  search(q: string) {
+    this.query = q;
+    this.page.set(1);
+    this.load();
+  }
+
+  go(page: number) {
+    this.page.set(page);
+    this.load();
+  }
+
+  private load() {
+    this.loading.set(true);
+    this.error.set(null);
+    this.api.patients(this.query, this.page(), this.pageSize).subscribe({
+      next: (res) => {
+        this.patients.set(res.items);
+        this.total.set(res.total);
+        this.loading.set(false);
+      },
+      error: (e: HttpErrorResponse) => {
+        this.loading.set(false);
+        this.error.set(errorMessage(e, 'Could not load patients.'));
+      },
+    });
+  }
+
+  assign(patient: PatientSummary, doctorId: string) {
+    this.error.set(null);
+    this.message.set(null);
+    this.api.assignDoctor(patient.patient_id, Number(doctorId)).subscribe({
+      next: (res) => {
+        this.assigning.set(null);
+        this.message.set(`${res.patient_name} is now assigned to Dr. ${res.doctor_name}.`);
+      },
+      error: (e: HttpErrorResponse) => this.error.set(errorMessage(e, 'Could not assign the doctor.')),
+    });
+  }
+}
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\admin\manage-users.ts ==========
+
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AdminApi } from '../core/admin-api.service';
+import { errorMessage } from '../core/error-message';
+import { UserRow } from '../core/models';
+
+@Component({
+  selector: 'app-manage-users',
+  imports: [ReactiveFormsModule],
+  template: `
+    <div class="head">
+      <h1>Users</h1>
+      <button type="button" class="primary" (click)="showForm.set(!showForm())">
+        {{ showForm() ? 'Close' : '+ Add user' }}
+      </button>
+    </div>
+
+    @if (showForm()) {
+      <form class="card" [formGroup]="form" (ngSubmit)="create()">
+        <div class="grid">
+          <label>Username <input formControlName="username" /></label>
+          <label>Password (min 8) <input type="password" formControlName="password" /></label>
+          <label>
+            Type
+            <select formControlName="user_type">
+              <option value="Admin">Admin</option>
+              <option value="Staff">Staff</option>
+            </select>
+          </label>
+          <label>First name <input formControlName="first_name" /></label>
+          <label>Last name <input formControlName="last_name" /></label>
+        </div>
+        <p class="muted">Only users of type Admin can sign in on the Admin tab.</p>
+        <button class="primary" type="submit" [disabled]="form.invalid || saving()">
+          {{ saving() ? 'Saving…' : 'Create user' }}
+        </button>
+      </form>
+    }
+
+    <div class="searchbar">
+      <input #q type="search" placeholder="Search by name or username" (keyup.enter)="search(q.value)" />
+      <button type="button" class="secondary" (click)="search(q.value)">Search</button>
+    </div>
+
+    @if (error()) { <p class="err">{{ error() }}</p> }
+    @if (message()) { <p class="ok">{{ message() }}</p> }
+
+    @if (loading()) {
+      <p class="muted">Loading…</p>
+    } @else {
+      <p class="muted">{{ total() }} user(s) · page {{ page() }} of {{ totalPages() }}</p>
+      <div class="list">
+        @for (u of users(); track u.user_id) {
+          <article class="card row">
+            <div>
+              <h2>{{ u.username }} <span class="badge">{{ u.user_type }}</span></h2>
+              <p class="muted">{{ u.first_name }} {{ u.last_name }}</p>
+            </div>
+
+            @if (resetting() === u.user_id) {
+              <div class="reset">
+                <input #pw type="password" placeholder="New password (min 8)" />
+                <button type="button" class="primary" [disabled]="pw.value.length < 8" (click)="reset(u, pw.value)">
+                  Reset
+                </button>
+                <button type="button" class="secondary" (click)="resetting.set(null)">Cancel</button>
+              </div>
+            } @else {
+              <button type="button" class="secondary" (click)="resetting.set(u.user_id)">Reset password</button>
+            }
+          </article>
+        } @empty {
+          <div class="card"><p class="muted">No users found.</p></div>
+        }
+      </div>
+
+      <div class="pager">
+        <button type="button" class="secondary" [disabled]="page() <= 1" (click)="go(page() - 1)">Previous</button>
+        <button type="button" class="secondary" [disabled]="page() >= totalPages()" (click)="go(page() + 1)">Next</button>
+      </div>
+    }
+  `,
+  styles: `
+    .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    h1 { margin: 0; color: #4b3a8a; }
+    .card { margin-bottom: .75rem; padding: 1rem 1.25rem; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgb(0 0 0 / 6%); }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+    .row h2 { margin: 0; font-size: 1.05rem; }
+    .row p { margin: .2rem 0; font-size: .9rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .75rem 1rem; }
+    label { display: block; font-size: .9rem; }
+    input, select { width: 100%; box-sizing: border-box; margin-top: .25rem; padding: .55rem; border: 1px solid #d6d0ea; border-radius: 8px; background: #fff; }
+    .searchbar { display: flex; gap: .5rem; margin: 1rem 0 .75rem; }
+    .searchbar input { margin: 0; }
+    .reset { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+    .reset input { margin: 0; width: 200px; }
+    .primary { padding: .5rem 1rem; border: 0; border-radius: 8px; background: #4b3a8a; color: #fff; cursor: pointer; margin-top: .5rem; }
+    .head .primary, .reset .primary { margin-top: 0; }
+    .primary:disabled { opacity: .5; cursor: not-allowed; }
+    .secondary { padding: .5rem 1rem; border: 1px solid #4b3a8a; background: #fff; color: #4b3a8a; border-radius: 8px; cursor: pointer; }
+    .secondary:disabled { opacity: .5; cursor: not-allowed; }
+    .badge { margin-left: .4rem; padding: .15rem .6rem; border-radius: 999px; font-size: .75rem; background: #ece8f7; color: #4b3a8a; }
+    .pager { display: flex; justify-content: center; gap: .75rem; margin-top: 1rem; }
+    .muted { color: #6b6785; font-size: .9rem; }
+    .err { color: #b3261e; }
+    .ok { color: #1b7f3b; }
+    @media (max-width: 700px) { .row { flex-direction: column; align-items: flex-start; } }
+  `,
+})
+export class ManageUsers implements OnInit {
+  private fb = inject(NonNullableFormBuilder);
+  private api = inject(AdminApi);
+  private pageSize = 10;
+  private query = '';
+
+  users = signal<UserRow[]>([]);
+  page = signal(1);
+  total = signal(0);
+  totalPages = computed(() => Math.max(1, Math.ceil(this.total() / this.pageSize)));
+
+  loading = signal(false);
+  saving = signal(false);
+  showForm = signal(false);
+  resetting = signal<number | null>(null);
+  error = signal<string | null>(null);
+  message = signal<string | null>(null);
+
+  form = this.fb.group({
+    username: ['', [Validators.required, Validators.maxLength(50)]],
+    password: ['', [Validators.required, Validators.minLength(8)]],
+    user_type: ['Admin', Validators.required],
+    first_name: [''],
+    last_name: [''],
+  });
+
+  ngOnInit() {
+    this.load();
+  }
+
+  search(q: string) {
+    this.query = q;
+    this.page.set(1);
+    this.load();
+  }
+
+  go(page: number) {
+    this.page.set(page);
+    this.load();
+  }
+
+  private load() {
+    this.loading.set(true);
+    this.error.set(null);
+    this.api.users(this.query, this.page(), this.pageSize).subscribe({
+      next: (res) => {
+        this.users.set(res.items);
+        this.total.set(res.total);
+        this.loading.set(false);
+      },
+      error: (e: HttpErrorResponse) => {
+        this.loading.set(false);
+        this.error.set(errorMessage(e, 'Could not load users.'));
+      },
+    });
+  }
+
+  create() {
+    if (this.form.invalid) return;
+    const v = this.form.getRawValue();
+    const orNull = (s: string) => (s.trim() ? s.trim() : null);
+
+    this.saving.set(true);
+    this.error.set(null);
+    this.message.set(null);
+
+    this.api
+      .createUser({
+        username: v.username.trim(),
+        password: v.password,
+        user_type: v.user_type,
+        first_name: orNull(v.first_name),
+        last_name: orNull(v.last_name),
+      })
+      .subscribe({
+        next: (u) => {
+          this.saving.set(false);
+          this.message.set(`User ${u.username} created.`);
+          this.form.reset({ user_type: 'Admin' });
+          this.showForm.set(false);
+          this.load();
+        },
+        error: (e: HttpErrorResponse) => {
+          this.saving.set(false);
+          this.error.set(errorMessage(e, 'Could not create the user.'));
+        },
+      });
+  }
+
+  reset(user: UserRow, newPassword: string) {
+    this.error.set(null);
+    this.message.set(null);
+    this.api.resetPassword(user.user_id, newPassword).subscribe({
+      next: () => {
+        this.resetting.set(null);
+        this.message.set(`Password reset for ${user.username}.`);
+      },
+      error: (e: HttpErrorResponse) => this.error.set(errorMessage(e, 'Could not reset the password.')),
+    });
+  }
+}
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\auth\login\login.ts ==========
+
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, inject, signal } from '@angular/core';
+import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Router , RouterLink } from '@angular/router';
+import { AuthService } from '../../core/auth.service';
+import { Role } from '../../core/models';
+
+@Component({
+  selector: 'app-login',
+  imports: [ReactiveFormsModule, RouterLink],
+  template: `
+    <main class="card">
+      <h1>Pedia Centre</h1>
+
+      <div class="tabs">
+        @for (m of modes; track m.value) {
+          <button type="button" [class.active]="mode() === m.value" (click)="setMode(m.value)">
+            {{ m.label }}
+          </button>
+        }
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="submit()">
+        <label>
+          {{ identifierLabel[mode()] }}
+          <input formControlName="identifier" autocomplete="username" />
+        </label>
+        @if (form.controls.identifier.touched && form.controls.identifier.invalid) {
+          <small class="err">
+            {{ mode() === 'guardian' ? 'Enter a valid 10-digit mobile number' : 'This field is required' }}
+          </small>
+        }
+
+        <label>
+          Password
+          <input type="password" formControlName="password" autocomplete="current-password" />
+        </label>
+
+        @if (error()) {
+          <p class="err">{{ error() }}</p>
+        }
+
+        <button class="primary" type="submit" [disabled]="form.invalid || loading()">
+          {{ loading() ? 'Signing in…' : 'Sign in' }}
+        </button>
+              @if (mode() === 'guardian') {
+        <p class="foot">New parent? <a routerLink="/register">Create an account</a></p>
+      }
+      </form>
+    </main>
+  `,
+  styles: `
+    :host { display: grid; min-height: 100vh; place-items: center; background: #f2f7fb; font-family: system-ui, sans-serif; }
+    .card { width: min(380px, 92vw); padding: 2rem; background: #fff; border-radius: 16px; box-shadow: 0 8px 30px rgb(0 0 0 / 8%); }
+    h1 { margin: 0 0 1rem; font-size: 1.5rem; color: #0b6e8a; }
+    .tabs { display: flex; gap: .5rem; margin-bottom: 1rem; }
+    .tabs button { flex: 1; padding: .5rem; border: 1px solid #cfe3ec; background: #fff; border-radius: 8px; cursor: pointer; }
+    .tabs button.active { background: #0b6e8a; color: #fff; border-color: #0b6e8a; }
+    label { display: block; margin-top: .75rem; font-size: .9rem; }
+    input { width: 100%; box-sizing: border-box; margin-top: .25rem; padding: .6rem; border: 1px solid #cfe3ec; border-radius: 8px; }
+    .primary { width: 100%; margin-top: 1.25rem; padding: .7rem; border: 0; border-radius: 8px; background: #0b6e8a; color: #fff; cursor: pointer; }
+    .primary:disabled { opacity: .5; cursor: not-allowed; }
+    .err { color: #b3261e; font-size: .85rem; }
+    .foot { text-align: center; font-size: .9rem; margin-top: 1rem; }
+  `,
+})
+export class Login {
+  private fb = inject(NonNullableFormBuilder);
+  private auth = inject(AuthService);
+  private router = inject(Router);
+
+  modes: { value: Role; label: string }[] = [
+    { value: 'guardian', label: 'Parent' },
+    { value: 'doctor', label: 'Doctor' },
+    { value: 'admin', label: 'Admin' },
+  ];
+  identifierLabel: Record<Role, string> = {
+    guardian: 'Mobile number',
+    doctor: 'Staff ID',
+    admin: 'Username',
+  };
+
+  mode = signal<Role>('guardian');
+  loading = signal(false);
+  error = signal<string | null>(null);
+
+  form = this.fb.group({
+    identifier: ['', [Validators.required, Validators.pattern(/^[6-9]\d{9}$/)]],
+    password: ['', Validators.required],
+  });
+
+  setMode(mode: Role) {
+    this.mode.set(mode);
+    this.error.set(null);
+    const ctrl = this.form.controls.identifier;
+    ctrl.setValidators(
+      mode === 'guardian'
+        ? [Validators.required, Validators.pattern(/^[6-9]\d{9}$/)]
+        : [Validators.required],
+    );
+    ctrl.updateValueAndValidity();
+  }
+
+  submit() {
+    if (this.form.invalid) return;
+    const { identifier, password } = this.form.getRawValue();
+    this.loading.set(true);
+    this.error.set(null);
+
+    const request$ =
+      this.mode() === 'guardian'
+        ? this.auth.loginGuardian(identifier, password)
+        : this.mode() === 'doctor'
+          ? this.auth.loginDoctor(identifier, password)
+          : this.auth.loginAdmin(identifier, password);
+
+    request$.subscribe({
+      next: (session) => this.router.navigate(['/', session.role]),
+      error: (err: HttpErrorResponse) => {
+        this.loading.set(false);
+        const detail = err.error?.detail;
+        this.error.set(typeof detail === 'string' ? detail : 'Login failed. Please try again.');
+      },
+    });
+    
+  }
+}
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\auth\register\register.ts ==========
+
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, inject, signal } from '@angular/core';
+import {
+  AbstractControl,
+  NonNullableFormBuilder,
+  ReactiveFormsModule,
+  ValidationErrors,
+  Validators,
+} from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { AuthService } from '../../core/auth.service';
+import { RegistrationRequest, RegistrationResponse } from '../../core/models';
+
+interface Field {
+  key: string;
+  label: string;
+  type?: string;
+  options?: string[];
+}
+
+// Child must be born in the past and be under 18 (same rule as the backend).
+function underEighteen(control: AbstractControl): ValidationErrors | null {
+  const value = control.value;
+  if (!value) return null;
+  const dob = new Date(value);
+  const today = new Date();
+  if (dob > today) return { future: true };
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDiff = today.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) age--;
+  return age >= 18 ? { adult: true } : null;
+}
+
+function passwordsMatch(group: AbstractControl): ValidationErrors | null {
+  const password = group.get('password')?.value;
+  const confirm = group.get('confirm_password')?.value;
+  return password && confirm && password !== confirm ? { mismatch: true } : null;
+}
+
+@Component({
+  selector: 'app-register',
+  imports: [ReactiveFormsModule, RouterLink],
+  template: `
+    <main class="card">
+      @if (result(); as res) {
+        <h1>Registration successful</h1>
+        <p>{{ res.message }}. Medical record numbers (MRN) for your children:</p>
+        <ul>
+          @for (p of res.patients; track p.patient_id) {
+            <li>{{ p.first_name }}: <strong>{{ p.mrn }}</strong></li>
+          }
+        </ul>
+        <a class="primary link" routerLink="/login">Go to sign in</a>
+      } @else {
+        <h1>Create your account</h1>
+
+        <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+          <h2>Parent / guardian details</h2>
+          <div class="grid">
+            @for (f of guardianFields; track f.key) {
+              <label>
+                {{ f.label }}
+                @if (f.options) {
+                  <select [formControlName]="f.key">
+                    <option value="">Select</option>
+                    @for (o of f.options; track o) {
+                      <option [value]="o">{{ o }}</option>
+                    }
+                  </select>
+                } @else {
+                  <input [type]="f.type ?? 'text'" [formControlName]="f.key" />
+                }
+                <small class="err">{{ msg(form.get(f.key)) }}</small>
+              </label>
+            }
+          </div>
+          @if (form.hasError('mismatch') && form.controls.confirm_password.touched) {
+            <p class="err">Passwords do not match</p>
+          }
+
+          <h2>Children</h2>
+          <div formArrayName="children">
+            @for (child of children.controls; track child; let i = $index) {
+              <section class="child" [formGroupName]="i">
+                <div class="child-head">
+                  <h3>Child {{ i + 1 }}</h3>
+                  @if (children.length > 1) {
+                    <button type="button" class="link-btn" (click)="removeChild(i)">Remove</button>
+                  }
+                </div>
+                <div class="grid">
+                  @for (f of childFields; track f.key) {
+                    <label>
+                      {{ f.label }}
+                      @if (f.options) {
+                        <select [formControlName]="f.key">
+                          <option value="">Select</option>
+                          @for (o of f.options; track o) {
+                            <option [value]="o">{{ o }}</option>
+                          }
+                        </select>
+                      } @else {
+                        <input [type]="f.type ?? 'text'" [formControlName]="f.key" />
+                      }
+                      <small class="err">{{ msg(child.get(f.key)) }}</small>
+                    </label>
+                  }
+                </div>
+              </section>
+            }
+          </div>
+          <button type="button" class="secondary" (click)="addChild()">+ Add another child</button>
+
+          <h2>Consent</h2>
+          <label class="check">
+            <input type="checkbox" formControlName="terms_accepted" />
+            I accept the terms and conditions
+          </label>
+          <small class="err">{{ msg(form.get('terms_accepted')) }}</small>
+          <label class="check">
+            <input type="checkbox" formControlName="health_data_consent" />
+            I consent to the use of my child's health data
+          </label>
+          <small class="err">{{ msg(form.get('health_data_consent')) }}</small>
+
+          @if (error()) {
+            <p class="err banner">{{ error() }}</p>
+          }
+
+          <button class="primary" type="submit" [disabled]="loading()">
+            {{ loading() ? 'Creating account…' : 'Create account' }}
+          </button>
+          <p class="foot">Already registered? <a routerLink="/login">Sign in</a></p>
+        </form>
+      }
+    </main>
+  `,
+  styles: `
+    :host { display: block; min-height: 100vh; background: #f2f7fb; font-family: system-ui, sans-serif; padding: 2rem 1rem; }
+    .card { max-width: 760px; margin: 0 auto; padding: 2rem; background: #fff; border-radius: 16px; box-shadow: 0 8px 30px rgb(0 0 0 / 8%); }
+    h1 { margin: 0 0 1rem; font-size: 1.6rem; color: #0b6e8a; }
+    h2 { margin: 1.5rem 0 .5rem; font-size: 1.1rem; color: #0b6e8a; }
+    h3 { margin: 0; font-size: 1rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .75rem 1rem; }
+    label { display: block; font-size: .9rem; }
+    input:not([type='checkbox']), select { width: 100%; box-sizing: border-box; margin-top: .25rem; padding: .6rem; border: 1px solid #cfe3ec; border-radius: 8px; background: #fff; }
+    .check { display: flex; gap: .5rem; align-items: center; margin-top: .75rem; }
+    .child { margin: .75rem 0; padding: 1rem; border: 1px solid #e0edf3; border-radius: 12px; background: #fafdff; }
+    .child-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem; }
+    .link-btn { border: 0; background: none; color: #b3261e; cursor: pointer; }
+    .secondary { margin-top: .5rem; padding: .5rem 1rem; border: 1px solid #0b6e8a; background: #fff; color: #0b6e8a; border-radius: 8px; cursor: pointer; }
+    .primary { display: block; width: 100%; box-sizing: border-box; margin-top: 1.5rem; padding: .75rem; border: 0; border-radius: 8px; background: #0b6e8a; color: #fff; text-align: center; text-decoration: none; cursor: pointer; }
+    .primary:disabled { opacity: .5; cursor: not-allowed; }
+    .err { color: #b3261e; font-size: .8rem; min-height: 1em; display: block; }
+    .banner { font-size: .9rem; margin-top: 1rem; }
+    .foot { text-align: center; font-size: .9rem; }
+  `,
+})
+export class Register {
+  private fb = inject(NonNullableFormBuilder);
+  private auth = inject(AuthService);
+
+  loading = signal(false);
+  error = signal<string | null>(null);
+  result = signal<RegistrationResponse | null>(null);
+
+  guardianFields: Field[] = [
+    { key: 'first_name', label: 'First name' },
+    { key: 'last_name', label: 'Last name' },
+    { key: 'relationship_to_child', label: 'Relationship to child', options: ['Mother', 'Father', 'Guardian', 'Other'] },
+    { key: 'mobile_number', label: 'Mobile number (10 digits, starts with 6-9)', type: 'tel' },
+    { key: 'email', label: 'Email (optional)', type: 'email' },
+    { key: 'preferred_language', label: 'Preferred language (optional)', options: ['English', 'Hindi', 'Bengali'] },
+    { key: 'password', label: 'Password (minimum 8 characters)', type: 'password' },
+    { key: 'confirm_password', label: 'Confirm password', type: 'password' },
+    { key: 'address_line1', label: 'Address line 1' },
+    { key: 'address_line2', label: 'Address line 2 (optional)' },
+    { key: 'city', label: 'City' },
+    { key: 'state', label: 'State' },
+    { key: 'pincode', label: 'Pincode (6 digits)' },
+  ];
+
+  childFields: Field[] = [
+    { key: 'first_name', label: 'First name' },
+    { key: 'last_name', label: 'Last name' },
+    { key: 'date_of_birth', label: 'Date of birth', type: 'date' },
+    { key: 'gender', label: 'Gender', options: ['Male', 'Female', 'Other'] },
+    { key: 'blood_group', label: 'Blood group (optional)', options: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] },
+    { key: 'immunization_status', label: 'Immunization status (optional)', options: ['Complete', 'Partial', 'Not started'] },
+    { key: 'abha_id', label: 'ABHA ID (optional, 14 digits)' },
+    { key: 'aadhaar_number', label: 'Aadhaar number (optional, 12 digits)' },
+    { key: 'known_allergies', label: 'Known allergies (optional)' },
+    { key: 'existing_conditions', label: 'Existing conditions (optional)' },
+    { key: 'current_medications', label: 'Current medications (optional)' },
+    { key: 'referred_by', label: 'Referred by (optional)' },
+  ];
+
+  form = this.fb.group(
+    {
+      first_name: ['', [Validators.required, Validators.maxLength(50)]],
+      last_name: ['', [Validators.required, Validators.maxLength(50)]],
+      relationship_to_child: ['', Validators.required],
+      mobile_number: ['', [Validators.required, Validators.pattern(/^[6-9]\d{9}$/)]],
+      email: ['', Validators.email],
+      preferred_language: [''],
+      password: ['', [Validators.required, Validators.minLength(8)]],
+      confirm_password: ['', Validators.required],
+      address_line1: ['', [Validators.required, Validators.maxLength(100)]],
+      address_line2: ['', Validators.maxLength(100)],
+      city: ['', [Validators.required, Validators.maxLength(50)]],
+      state: ['', [Validators.required, Validators.maxLength(50)]],
+      pincode: ['', [Validators.required, Validators.pattern(/^\d{6}$/)]],
+      terms_accepted: [false, Validators.requiredTrue],
+      health_data_consent: [false, Validators.requiredTrue],
+      children: this.fb.array([this.newChild()]),
+    },
+    { validators: passwordsMatch },
+  );
+
+  get children() {
+    return this.form.controls.children;
+  }
+
+  private newChild() {
+    return this.fb.group({
+      first_name: ['', [Validators.required, Validators.maxLength(50)]],
+      last_name: ['', [Validators.required, Validators.maxLength(50)]],
+      date_of_birth: ['', [Validators.required, underEighteen]],
+      gender: ['', Validators.required],
+      blood_group: [''],
+      immunization_status: [''],
+      abha_id: ['', Validators.pattern(/^\d{14}$/)],
+      aadhaar_number: ['', Validators.pattern(/^[2-9]\d{11}$/)],
+      known_allergies: ['', Validators.maxLength(255)],
+      existing_conditions: ['', Validators.maxLength(500)],
+      current_medications: ['', Validators.maxLength(255)],
+      referred_by: ['', Validators.maxLength(100)],
+    });
+  }
+
+  addChild() {
+    this.children.push(this.newChild());
+  }
+
+  removeChild(index: number) {
+    if (this.children.length > 1) this.children.removeAt(index);
+  }
+
+  msg(control: AbstractControl | null): string {
+    if (!control || !control.touched || !control.errors) return '';
+    const e = control.errors;
+    if (e['required'] || e['requiredTrue']) return 'This is required';
+    if (e['pattern']) return 'Invalid format';
+    if (e['email']) return 'Enter a valid email';
+    if (e['minlength']) return `Minimum ${e['minlength'].requiredLength} characters`;
+    if (e['maxlength']) return `Maximum ${e['maxlength'].requiredLength} characters`;
+    if (e['future']) return 'Date cannot be in the future';
+    if (e['adult']) return 'Child must be under 18';
+    return 'Invalid value';
+  }
+
+  submit() {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      this.error.set('Please fix the highlighted fields.');
+      return;
+    }
+
+    const v = this.form.getRawValue();
+    const orNull = (s: string) => (s && s.trim() ? s.trim() : null);
+
+    const payload: RegistrationRequest = {
+      first_name: v.first_name.trim(),
+      last_name: v.last_name.trim(),
+      relationship_to_child: v.relationship_to_child,
+      mobile_number: v.mobile_number,
+      email: orNull(v.email),
+      password: v.password,
+      address_line1: v.address_line1.trim(),
+      address_line2: orNull(v.address_line2),
+      city: v.city.trim(),
+      state: v.state.trim(),
+      pincode: v.pincode,
+      preferred_language: orNull(v.preferred_language),
+      terms_accepted: v.terms_accepted,
+      health_data_consent: v.health_data_consent,
+      children: v.children.map((c) => ({
+        first_name: c.first_name.trim(),
+        last_name: c.last_name.trim(),
+        date_of_birth: c.date_of_birth,
+        gender: c.gender,
+        abha_id: orNull(c.abha_id),
+        aadhaar_number: orNull(c.aadhaar_number),
+        blood_group: orNull(c.blood_group),
+        known_allergies: orNull(c.known_allergies),
+        existing_conditions: orNull(c.existing_conditions),
+        current_medications: orNull(c.current_medications),
+        immunization_status: orNull(c.immunization_status),
+        referred_by: orNull(c.referred_by),
+      })),
+    };
+
+    this.loading.set(true);
+    this.error.set(null);
+
+    this.auth.register(payload).subscribe({
+      next: (res) => {
+        this.loading.set(false);
+        this.result.set(res);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.loading.set(false);
+        this.error.set(this.errorText(err));
+      },
+    });
+  }
+
+  private errorText(err: HttpErrorResponse): string {
+    const detail = err.error?.detail;
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) {
+      return detail
+        .map((d: { loc?: unknown[]; msg: string }) => `${(d.loc ?? []).slice(1).join(' > ')}: ${d.msg}`)
+        .join('; ');
+    }
+    return err.status === 0
+      ? 'Cannot reach the server. Is the backend running?'
+      : 'Registration failed. Please try again.';
+  }
+}
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\core\admin-api.service.ts ==========
+
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Injectable, inject } from '@angular/core';
+import { API_URL } from './config';
+import {
+  AssignmentResponse,
+  Availability,
+  AvailabilityRequest,
+  DoctorCreateRequest,
+  DoctorCreateResponse,
+  DoctorPublic,
+  DoctorSummary,
+  PageResult,
+  PatientSummary,
+  UserCreateRequest,
+  UserRow,
+} from './models';
+
+@Injectable({ providedIn: 'root' })
+export class AdminApi {
+  private http = inject(HttpClient);
+
+  private search(search: string): HttpParams {
+    let params = new HttpParams();
+    if (search.trim()) params = params.set('search', search.trim());
+    return params;
+  }
+
+  doctors(search = '') {
+    return this.http.get<DoctorSummary[]>(`${API_URL}/doctors`, { params: this.search(search) });
+  }
+
+  doctor(id: number) {
+    return this.http.get<DoctorPublic>(`${API_URL}/doctors/${id}`);
+  }
+
+  createDoctor(payload: DoctorCreateRequest) {
+    return this.http.post<DoctorCreateResponse>(`${API_URL}/doctors`, payload);
+  }
+
+  availability(doctorId: number) {
+    return this.http.get<Availability[]>(`${API_URL}/doctors/${doctorId}/availability`);
+  }
+
+  addAvailability(doctorId: number, payload: AvailabilityRequest) {
+    return this.http.post<Availability>(`${API_URL}/doctors/${doctorId}/availability`, payload);
+  }
+
+  patients(search: string, page: number, pageSize: number) {
+    const params = this.search(search).set('page', page).set('page_size', pageSize);
+    return this.http.get<PageResult<PatientSummary>>(`${API_URL}/patients`, { params });
+  }
+
+  assignDoctor(patientId: number, doctorId: number) {
+    return this.http.post<AssignmentResponse>(`${API_URL}/doctor-assignments/`, {
+      patient_id: patientId,
+      doctor_id: doctorId,
+    });
+  }
+
+  users(search: string, page: number, pageSize: number) {
+    const params = this.search(search).set('page', page).set('page_size', pageSize);
+    return this.http.get<PageResult<UserRow>>(`${API_URL}/users`, { params });
+  }
+
+  createUser(payload: UserCreateRequest) {
+    return this.http.post<UserRow>(`${API_URL}/users`, payload);
+  }
+
+  resetPassword(userId: number, newPassword: string) {
+    return this.http.post<{ message: string }>(`${API_URL}/users/${userId}/reset-password`, {
+      current_password: '',
+      new_password: newPassword,
+    });
+  }
+}
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\core\auth.interceptor.ts ==========
+
+
+import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
+import { inject } from '@angular/core';
+import { catchError, throwError } from 'rxjs';
+import { AuthService } from './auth.service';
+import { API_URL } from './config';
+
+export const authInterceptor: HttpInterceptorFn = (req, next) => {
+  const auth = inject(AuthService);
+  const token = auth.token;
+  console.log('[interceptor]', req.method, req.url, '| api call:', req.url.startsWith(API_URL), '|', token ? 'token: yes' : 'token: NO');
+  
+  const authReq =
+    token && req.url.startsWith(API_URL)
+      ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } })
+      : req;
+
+  return next(authReq).pipe(
+    catchError((err: HttpErrorResponse) => {
+      // Expired or invalid token on a protected call: sign out.
+      if (err.status === 401 && token && !req.url.includes('/auth/')) {
+        auth.logout();
+      }
+      return throwError(() => err);
+    }),
+  );
+};
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\core\auth.service.ts ==========
+
+import { HttpClient } from '@angular/common/http';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
+import { map } from 'rxjs';
+import { API_URL } from './config';
+import {
+  AuthTokenResponse,
+  DoctorTokenResponse,
+  RegistrationRequest,
+  RegistrationResponse,
+  Role,
+} from './models';
+
+export interface Session {
+  token: string;
+  role: Role;
+  userId: number;
+  name?: string;
+  mustChangePassword?: boolean;
+}
+
+const STORAGE_KEY = 'pc_session';
+
+@Injectable({ providedIn: 'root' })
+export class AuthService {
+  private http = inject(HttpClient);
+  private router = inject(Router);
+
+  private _session = signal<Session | null>(this.restore());
+  readonly session = this._session.asReadonly();
+  readonly role = computed(() => this._session()?.role ?? null);
+
+  get token(): string | null {
+    return this._session()?.token ?? null;
+  }
+
+  loginGuardian(mobile: string, password: string) {
+    return this.http
+      .post<AuthTokenResponse>(`${API_URL}/auth/login`, { mobile_number: mobile, password })
+      .pipe(map((r) => this.start(r.access_token, 'guardian')));
+  }
+
+  loginDoctor(staffId: string, password: string) {
+    return this.http
+      .post<DoctorTokenResponse>(`${API_URL}/auth/doctor-login`, { staff_id: staffId, password })
+      .pipe(
+        map((r) =>
+          this.start(r.access_token, 'doctor', {
+            name: r.doctor_name,
+            mustChangePassword: r.must_change_password,
+          }),
+        ),
+      );
+  }
+
+ loginAdmin(username: string, password: string) {
+  debugger;
+
+  return this.http
+    .post<AuthTokenResponse>(
+      `${API_URL}/auth/admin-login`,
+      { username, password }
+    )
+    .pipe(
+      map((r) => {
+        debugger;
+        console.log('Admin login response:', r);
+        console.log('Access token:', r.access_token);
+        return this.start(r.access_token, 'admin');
+      })
+    );
+}
+
+    register(payload: RegistrationRequest) {
+    return this.http.post<RegistrationResponse>(`${API_URL}/registration`, payload);
+  }
+    markPasswordChanged() {
+    const s = this._session();
+    if (!s) return;
+    const updated = { ...s, mustChangePassword: false };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    this._session.set(updated);
+  }
+
+  logout() {
+    localStorage.removeItem(STORAGE_KEY);
+    this._session.set(null);
+    this.router.navigate(['/login']);
+  }
+
+  private start(token: string, role: Role, extra: Partial<Session> = {}): Session {
+    const claims = this.decode(token);
+    const session: Session = { token, role, userId: Number(claims?.sub), ...extra };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    this._session.set(session);
+    return session;
+  }
+
+  private restore(): Session | null {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const session: Session = JSON.parse(raw);
+      const exp = this.decode(session.token)?.exp;
+      if (exp && exp * 1000 < Date.now()) {
+        localStorage.removeItem(STORAGE_KEY);
+        return null;
+      }
+      return session;
+    } catch {
+      return null;
+    }
+  }
+
+  private decode(token: string): { sub?: string; exp?: number } | null {
+    try {
+      const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(atob(payload));
+    } catch {
+      return null;
+    }
+  }
+}
+
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\core\config.ts ==========
+
+export const API_URL = 'http://127.0.0.1:8000/api/v1';
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\core\doctor-api.service.ts ==========
+
+import { HttpClient } from '@angular/common/http';
+import { Injectable, inject } from '@angular/core';
+import { API_URL } from './config';
+import {
+  Appointment,
+  DoctorProfile,
+  PatientSummary,
+  TreatmentRecord,
+  TreatmentRecordRequest,
+} from './models';
+
+@Injectable({ providedIn: 'root' })
+export class DoctorApi {
+  private http = inject(HttpClient);
+
+  profile() {
+    return this.http.get<DoctorProfile>(`${API_URL}/auth/doctor/me`);
+  }
+
+  changePassword(currentPassword: string, newPassword: string) {
+    return this.http.post<{ message: string }>(`${API_URL}/auth/doctor/change-password`, {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+  }
+
+  appointments(upcomingOnly: boolean) {
+    return this.http.get<Appointment[]>(`${API_URL}/doctor/appointments`, {
+      params: { upcoming_only: upcomingOnly },
+    });
+  }
+
+  patients() {
+    return this.http.get<PatientSummary[]>(`${API_URL}/doctor/patients`);
+  }
+
+  history(patientId: number) {
+    return this.http.get<TreatmentRecord[]>(`${API_URL}/treatment-records/${patientId}`);
+  }
+
+  addRecord(payload: TreatmentRecordRequest) {
+    return this.http.post<TreatmentRecord>(`${API_URL}/treatment-records`, payload);
+  }
+}
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\core\error-message.ts ==========
+
+import { HttpErrorResponse } from '@angular/common/http';
+
+export function errorMessage(err: HttpErrorResponse, fallback: string): string {
+  const detail = err.error?.detail;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((d: { loc?: unknown[]; msg: string }) => `${(d.loc ?? []).slice(1).join(' > ')}: ${d.msg}`)
+      .join('; ');
+  }
+  return err.status === 0 ? 'Cannot reach the server. Is the backend running?' : fallback;
+}
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\core\models.ts ==========
+
+export type Role = 'guardian' | 'doctor' | 'admin';
+
+export interface AuthTokenResponse {
+  access_token: string;
+  token_type: string;
+}
+
+export interface DoctorTokenResponse extends AuthTokenResponse {
+  must_change_password: boolean;
+  doctor_name: string;
+}
+
+export interface GuardianProfile {
+  guardian_id: number;
+  first_name: string;
+  last_name: string;
+  mobile_number: string;
+  role: string;
+}
+
+export interface DoctorProfile {
+  doctor_id: number;
+  staff_id: string;
+  first_name: string;
+  last_name: string;
+  specialty: string;
+  registration_no: string;
+  must_change_password: boolean;
+}
+export interface ChildCreateRequest {
+  first_name: string;
+  last_name: string;
+  date_of_birth: string; // YYYY-MM-DD
+  gender: string;
+  abha_id: string | null;
+  aadhaar_number: string | null;
+  blood_group: string | null;
+  known_allergies: string | null;
+  existing_conditions: string | null;
+  current_medications: string | null;
+  immunization_status: string | null;
+  referred_by: string | null;
+}
+
+export interface RegistrationRequest {
+  first_name: string;
+  last_name: string;
+  relationship_to_child: string;
+  mobile_number: string;
+  email: string | null;
+  password: string;
+  address_line1: string;
+  address_line2: string | null;
+  city: string;
+  state: string;
+  pincode: string;
+  preferred_language: string | null;
+  terms_accepted: boolean;
+  health_data_consent: boolean;
+  children: ChildCreateRequest[];
+}
+
+export interface RegistrationResponse {
+  guardian_id: number;
+  patients: { patient_id: number; mrn: string; first_name: string }[];
+  message: string;
+}
+export interface DoctorPublic {
+  doctor_id: number;
+  first_name: string;
+  last_name: string;
+  qualification: string;
+  specialty: string;
+  experience_years: number;
+  languages: string | null;
+  consultation_fee: number;
+  available_days: string | null;
+}
+
+export interface SpecialtyCount {
+  specialty: string;
+  doctor_count: number;
+}
+
+export interface SlotsResponse {
+  doctor_id: number;
+  doctor_name: string;
+  date: string;
+  day_of_week: number;
+  slots: string[]; // "HH:MM"
+}
+
+export interface PatientSummary {
+  patient_id: number;
+  mrn: string;
+  first_name: string;
+  last_name: string;
+  date_of_birth: string;
+  gender: string;
+  blood_group: string | null;
+  guardian_name: string;
+  guardian_mobile: string;
+}
+
+export interface Appointment {
+  appointment_id: number;
+  appointment_ref: string;
+  doctor_id: number;
+  doctor_name: string;
+  patient_id: number;
+  patient_name: string;
+  mrn: string;
+  scheduled_at: string;
+  duration_minutes: number;
+  status: string;
+  reason_for_visit: string | null;
+}
+
+export interface BookingRequest {
+  doctor_id: number;
+  patient_id: number;
+  scheduled_at: string; // "YYYY-MM-DDTHH:MM:00"
+  reason_for_visit: string | null;
+}
+export interface Medication {
+  medication_name: string;
+  dosage: string | null;
+  frequency: string | null;
+  duration: string | null;
+  instructions: string | null;
+}
+
+export interface TreatmentRecord {
+  treatment_record_id: number;
+  patient_id: number;
+  patient_name: string;
+  doctor_id: number;
+  doctor_name: string;
+  appointment_id: number | null;
+  visit_date: string;
+  diagnosis: string;
+  medications: Medication[];
+  treatment_plan: string | null;
+  follow_up_date: string | null;
+  clinical_notes: string | null;
+  record_status: string;
+  created_at: string;
+}
+export interface TreatmentRecordRequest {
+  patient_id: number;
+  appointment_id: number | null;
+  visit_date: string;
+  diagnosis: string;
+  medications: Medication[];
+  treatment_plan: string | null;
+  follow_up_date: string | null;
+  clinical_notes: string | null;
+}
+export interface DoctorSummary {
+  doctor_id: number;
+  staff_id: string;
+  first_name: string;
+  last_name: string;
+  qualification: string;
+  specialty: string;
+  experience_years: number;
+  languages: string | null;
+  consultation_fee: number;
+  available_days: string | null;
+}
+
+export interface DoctorCreateRequest {
+  first_name: string;
+  last_name: string;
+  registration_no: string;
+  qualification: string;
+  specialty: string;
+  experience_years: number;
+  languages: string | null;
+  consultation_fee: number;
+  available_days: string | null;
+  mobile_number: string | null;
+  email: string | null;
+  temporary_password: string;
+}
+
+export interface DoctorCreateResponse {
+  doctor_id: number;
+  staff_id: string;
+  first_name: string;
+  last_name: string;
+  specialty: string;
+  message: string;
+}
+
+export interface Availability {
+  availability_id: number;
+  doctor_id: number;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  slot_minutes: number;
+}
+
+export interface AvailabilityRequest {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  slot_minutes: number;
+}
+
+export interface PageResult<T> {
+  total: number;
+  page: number;
+  page_size: number;
+  items: T[];
+}
+
+export interface UserRow {
+  user_id: number;
+  username: string;
+  user_type: string;
+  first_name: string | null;
+  last_name: string | null;
+  is_active?: boolean | null;
+}
+
+export interface UserCreateRequest {
+  username: string;
+  password: string;
+  user_type: string;
+  first_name: string | null;
+  last_name: string | null;
+}
+
+export interface AssignmentResponse {
+  message: string;
+  patient_id: number;
+  patient_name: string;
+  doctor_id: number;
+  doctor_name: string;
+  assignment_date: string;
+}
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\core\parent-api.service.ts ==========
+
+
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Injectable, inject } from '@angular/core';
+import { API_URL } from './config';
+
+import {
+  Appointment,
+  BookingRequest,
+  DoctorPublic,
+  PatientSummary,
+  SlotsResponse,
+  SpecialtyCount,
+} from './models';
+
+export interface DoctorFilters {
+  specialty?: string;
+  language?: string;
+  max_fee?: number | null;
+  day?: string;
+}
+
+@Injectable({ providedIn: 'root' })
+export class ParentApi {
+  private http = inject(HttpClient);
+
+  specialties() {
+    return this.http.get<SpecialtyCount[]>(
+      `${API_URL}/doctors/specialties`
+    );
+  }
+
+  doctors(filters: DoctorFilters = {}) {
+    let params = new HttpParams();
+
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined && value !== null && value !== '') {
+        params = params.set(key, String(value));
+      }
+    }
+
+    return this.http.get<DoctorPublic[]>(
+      `${API_URL}/doctors/available`,
+      { params }
+    );
+  }
+
+  doctor(id: number) {
+    return this.http.get<DoctorPublic>(
+      `${API_URL}/doctors/${id}`
+    );
+  }
+
+  slots(doctorId: number, date: string) {
+    return this.http.get<SlotsResponse>(
+      `${API_URL}/doctors/${doctorId}/slots`,
+      { params: { date } }
+    );
+  }
+
+  myChildren() {
+    return this.http.get<PatientSummary[]>(
+      `${API_URL}/patients/mine`
+    );
+  }
+
+  appointments(upcomingOnly: boolean) {
+    return this.http.get<Appointment[]>(
+      `${API_URL}/appointments`,
+      { params: { upcoming_only: upcomingOnly } }
+    );
+  }
+
+  book(payload: BookingRequest) {
+    return this.http.post<Appointment>(
+      `${API_URL}/appointments`,
+      payload
+    );
+  }
+
+  cancel(ref: string, reason: string | null) {
+    return this.http.patch<Appointment>(
+      `${API_URL}/appointments/${ref}/cancel`,
+      { reason }
+    );
+  }
+
+  treatmentHistory(patientId: number) {
+    return this.http.get<any[]>(
+      `${API_URL}/patients/${patientId}/treatment-history`
+    );
+  }
+}
+
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\core\role.guard.ts ==========
+
+import { inject } from '@angular/core';
+import { CanActivateFn, Router } from '@angular/router';
+import { AuthService } from './auth.service';
+import { Role } from './models';
+
+export const roleGuard =
+  (role: Role): CanActivateFn =>
+  () => {
+    const auth = inject(AuthService);
+    const router = inject(Router);
+    return auth.role() === role ? true : router.createUrlTree(['/login']);
+  };
+  export const passwordChangedGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  return auth.session()?.mustChangePassword
+    ? router.createUrlTree(['/doctor/change-password'])
+    : true;
+};
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\doctors\add-record.ts ==========
+
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { DoctorApi } from '../core/doctor-api.service';
+import { TreatmentRecordRequest } from '../core/models';
+
+@Component({
+  selector: 'app-add-record',
+  imports: [ReactiveFormsModule, RouterLink],
+  template: `
+    <a class="back" [routerLink]="['/doctor/patients', patientId]">← Back to history</a>
+    <h1>Add treatment record</h1>
+    @if (patientName()) {
+      <p class="muted">Patient: <strong>{{ patientName() }}</strong></p>
+    }
+
+    <form class="card" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <label>
+        Visit date and time
+        <input type="datetime-local" formControlName="visit_date" />
+      </label>
+
+      <label>
+        Diagnosis
+        <textarea rows="2" maxlength="500" formControlName="diagnosis"></textarea>
+      </label>
+      @if (form.controls.diagnosis.touched && form.controls.diagnosis.invalid) {
+        <small class="err">Diagnosis is required</small>
+      }
+
+      <h2>Medicines</h2>
+      <div formArrayName="medications">
+        @for (m of medications.controls; track m; let i = $index) {
+          <div class="med" [formGroupName]="i">
+            <div class="grid">
+              <label>Name <input formControlName="medication_name" /></label>
+              <label>Dosage <input formControlName="dosage" placeholder="e.g. 5 ml" /></label>
+              <label>Frequency <input formControlName="frequency" placeholder="e.g. Twice a day" /></label>
+              <label>Duration <input formControlName="duration" placeholder="e.g. 5 days" /></label>
+            </div>
+            <label>Instructions <input formControlName="instructions" /></label>
+            <button type="button" class="link" (click)="removeMedication(i)">Remove</button>
+          </div>
+        }
+      </div>
+      <button type="button" class="secondary" (click)="addMedication()">+ Add medicine</button>
+
+      <label>
+        Treatment plan (optional)
+        <textarea rows="3" maxlength="1000" formControlName="treatment_plan"></textarea>
+      </label>
+
+      <label>
+        Follow-up date (optional)
+        <input type="date" formControlName="follow_up_date" />
+      </label>
+
+      <label>
+        Clinical notes (optional)
+        <textarea rows="3" maxlength="2000" formControlName="clinical_notes"></textarea>
+      </label>
+
+      @if (error()) {
+        <p class="err">{{ error() }}</p>
+      }
+
+      <button class="primary" type="submit" [disabled]="saving()">
+        {{ saving() ? 'Saving…' : 'Save record' }}
+      </button>
+    </form>
+  `,
+  styles: `
+    .back { display: inline-block; margin-bottom: .75rem; color: #1d4f91; text-decoration: none; }
+    h1 { margin: 0 0 .5rem; color: #1d4f91; }
+    h2 { margin: 1.5rem 0 .5rem; font-size: 1.05rem; color: #1d4f91; }
+    .card { padding: 1.5rem; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgb(0 0 0 / 6%); }
+    label { display: block; margin-top: .85rem; font-size: .9rem; }
+    input, textarea { width: 100%; box-sizing: border-box; margin-top: .25rem; padding: .6rem; border: 1px solid #cfdcec; border-radius: 8px; font-family: inherit; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 1rem; }
+    .med { padding: .75rem 1rem; margin-bottom: .75rem; border: 1px solid #e0e9f5; border-radius: 10px; background: #fafcff; }
+    .link { border: 0; background: none; color: #b3261e; cursor: pointer; margin-top: .4rem; }
+    .secondary { margin-top: .25rem; padding: .45rem 1rem; border: 1px solid #1d4f91; background: #fff; color: #1d4f91; border-radius: 8px; cursor: pointer; }
+    .primary { width: 100%; margin-top: 1.5rem; padding: .75rem; border: 0; border-radius: 8px; background: #1d4f91; color: #fff; cursor: pointer; }
+    .primary:disabled { opacity: .5; cursor: not-allowed; }
+    .muted { color: #5b7480; }
+    .err { color: #b3261e; font-size: .85rem; }
+  `,
+})
+export class AddRecord implements OnInit {
+  private fb = inject(NonNullableFormBuilder);
+  private api = inject(DoctorApi);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+
+  patientId = Number(this.route.snapshot.paramMap.get('patientId'));
+  appointmentId = this.route.snapshot.queryParamMap.get('appointmentId');
+
+  patientName = signal('');
+  saving = signal(false);
+  error = signal<string | null>(null);
+
+  form = this.fb.group({
+    visit_date: [this.nowLocal(), Validators.required],
+    diagnosis: ['', [Validators.required, Validators.maxLength(500)]],
+    medications: this.fb.array([this.newMedication()]),
+    treatment_plan: [''],
+    follow_up_date: [''],
+    clinical_notes: [''],
+  });
+
+  get medications() {
+    return this.form.controls.medications;
+  }
+
+  ngOnInit() {
+    this.api.patients().subscribe({
+      next: (rows) => {
+        const p = rows.find((x) => x.patient_id === this.patientId);
+        if (p) this.patientName.set(`${p.first_name} ${p.last_name} (${p.mrn})`);
+      },
+      error: () => {},
+    });
+  }
+
+  private nowLocal(): string {
+    return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  }
+
+  private newMedication() {
+    return this.fb.group({
+      medication_name: [''],
+      dosage: [''],
+      frequency: [''],
+      duration: [''],
+      instructions: [''],
+    });
+  }
+
+  addMedication() {
+    this.medications.push(this.newMedication());
+  }
+
+  removeMedication(index: number) {
+    this.medications.removeAt(index);
+  }
+
+  submit() {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    const v = this.form.getRawValue();
+    const orNull = (s: string) => (s && s.trim() ? s.trim() : null);
+
+    const payload: TreatmentRecordRequest = {
+      patient_id: this.patientId,
+      appointment_id: this.appointmentId ? Number(this.appointmentId) : null,
+      visit_date: `${v.visit_date}:00`,
+      diagnosis: v.diagnosis.trim(),
+      medications: v.medications
+        .filter((m) => m.medication_name.trim())
+        .map((m) => ({
+          medication_name: m.medication_name.trim(),
+          dosage: orNull(m.dosage),
+          frequency: orNull(m.frequency),
+          duration: orNull(m.duration),
+          instructions: orNull(m.instructions),
+        })),
+      treatment_plan: orNull(v.treatment_plan),
+      follow_up_date: v.follow_up_date ? `${v.follow_up_date}T00:00:00` : null,
+      clinical_notes: orNull(v.clinical_notes),
+    };
+
+    this.saving.set(true);
+    this.error.set(null);
+
+    this.api.addRecord(payload).subscribe({
+      next: () => this.router.navigate(['/doctor/patients', this.patientId]),
+      error: (e: HttpErrorResponse) => {
+        this.saving.set(false);
+        const detail = e.error?.detail;
+        this.error.set(
+          typeof detail === 'string'
+            ? detail
+            : Array.isArray(detail)
+              ? detail.map((d: { msg: string }) => d.msg).join('; ')
+              : 'Could not save the record.',
+        );
+      },
+    });
+  }
+}
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\doctors\change-password.ts ==========
+
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, inject, signal } from '@angular/core';
+import {
+  AbstractControl,
+  NonNullableFormBuilder,
+  ReactiveFormsModule,
+  ValidationErrors,
+  Validators,
+} from '@angular/forms';
+import { Router } from '@angular/router';
+import { AuthService } from '../core/auth.service';
+import { DoctorApi } from '../core/doctor-api.service';
+
+function passwordsMatch(group: AbstractControl): ValidationErrors | null {
+  const a = group.get('new_password')?.value;
+  const b = group.get('confirm_password')?.value;
+  return a && b && a !== b ? { mismatch: true } : null;
+}
+
+@Component({
+  selector: 'app-change-password',
+  imports: [ReactiveFormsModule],
+  template: `
+    <section class="card">
+      <h1>Change your password</h1>
+      @if (auth.session()?.mustChangePassword) {
+        <p class="notice">You are using a temporary password. Please set a new one to continue.</p>
+      }
+
+      <form [formGroup]="form" (ngSubmit)="submit()">
+        <label>
+          Current password
+          <input type="password" formControlName="current_password" autocomplete="current-password" />
+        </label>
+        <label>
+          New password (minimum 8 characters)
+          <input type="password" formControlName="new_password" autocomplete="new-password" />
+        </label>
+        @if (form.controls.new_password.touched && form.controls.new_password.invalid) {
+          <small class="err">Use at least 8 characters</small>
+        }
+        <label>
+          Confirm new password
+          <input type="password" formControlName="confirm_password" autocomplete="new-password" />
+        </label>
+        @if (form.hasError('mismatch') && form.controls.confirm_password.touched) {
+          <small class="err">Passwords do not match</small>
+        }
+
+        @if (error()) {
+          <p class="err">{{ error() }}</p>
+        }
+
+        <button class="primary" type="submit" [disabled]="form.invalid || loading()">
+          {{ loading() ? 'Saving…' : 'Update password' }}
+        </button>
+      </form>
+    </section>
+  `,
+  styles: `
+    .card { max-width: 420px; margin: 2rem auto; padding: 2rem; background: #fff; border-radius: 16px; box-shadow: 0 8px 30px rgb(0 0 0 / 8%); }
+    h1 { margin: 0 0 1rem; font-size: 1.4rem; color: #1d4f91; }
+    .notice { padding: .6rem .8rem; background: #fff4d6; color: #8a5b00; border-radius: 8px; font-size: .9rem; }
+    label { display: block; margin-top: .85rem; font-size: .9rem; }
+    input { width: 100%; box-sizing: border-box; margin-top: .25rem; padding: .6rem; border: 1px solid #cfdcec; border-radius: 8px; }
+    .primary { width: 100%; margin-top: 1.25rem; padding: .7rem; border: 0; border-radius: 8px; background: #1d4f91; color: #fff; cursor: pointer; }
+    .primary:disabled { opacity: .5; cursor: not-allowed; }
+    .err { display: block; color: #b3261e; font-size: .85rem; margin-top: .3rem; }
+  `,
+})
+export class ChangePassword {
+  private fb = inject(NonNullableFormBuilder);
+  private api = inject(DoctorApi);
+  private router = inject(Router);
+  auth = inject(AuthService);
+
+  loading = signal(false);
+  error = signal<string | null>(null);
+
+  form = this.fb.group(
+    {
+      current_password: ['', Validators.required],
+      new_password: ['', [Validators.required, Validators.minLength(8)]],
+      confirm_password: ['', Validators.required],
+    },
+    { validators: passwordsMatch },
+  );
+
+  submit() {
+    if (this.form.invalid) return;
+    const { current_password, new_password } = this.form.getRawValue();
+    this.loading.set(true);
+    this.error.set(null);
+
+    this.api.changePassword(current_password, new_password).subscribe({
+      next: () => {
+        this.auth.markPasswordChanged();
+        this.router.navigate(['/doctor']);
+      },
+      error: (e: HttpErrorResponse) => {
+        this.loading.set(false);
+        this.error.set(
+          typeof e.error?.detail === 'string' ? e.error.detail : 'Could not update the password.',
+        );
+      },
+    });
+  }
+}
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\doctors\doctor-layout.ts ==========
+
+import { Component, inject } from '@angular/core';
+import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { AuthService } from '../core/auth.service';
+
+@Component({
+  selector: 'app-doctor-layout',
+  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  template: `
+    <header class="bar">
+      <a class="brand" routerLink="/doctor">Pedia Centre · Doctor</a>
+      @if (!auth.session()?.mustChangePassword) {
+        <nav>
+          <a routerLink="/doctor/schedule" routerLinkActive="active">My schedule</a>
+          <a routerLink="/doctor/patients" routerLinkActive="active">My patients</a>
+        </nav>
+      } @else {
+        <nav></nav>
+      }
+      @if (auth.session()?.name) {
+        <span class="who">Dr. {{ auth.session()?.name }}</span>
+      }
+      <button type="button" class="logout" (click)="auth.logout()">Log out</button>
+    </header>
+    <main class="content">
+      <router-outlet />
+    </main>
+  `,
+  styles: `
+    :host { display: block; min-height: 100vh; background: #f2f7fb; font-family: system-ui, sans-serif; }
+    .bar { display: flex; align-items: center; gap: 1.5rem; padding: .75rem 1.5rem; background: #1d4f91; color: #fff; }
+    .brand { font-weight: 700; font-size: 1.2rem; color: #fff; text-decoration: none; }
+    nav { display: flex; gap: 1rem; flex: 1; }
+    nav a { color: #d7e6f7; text-decoration: none; padding: .35rem .6rem; border-radius: 6px; }
+    nav a.active, nav a:hover { background: rgb(255 255 255 / 18%); color: #fff; }
+    .who { font-size: .9rem; }
+    .logout { border: 1px solid rgb(255 255 255 / 60%); background: transparent; color: #fff; padding: .4rem .9rem; border-radius: 8px; cursor: pointer; }
+    .content { max-width: 960px; margin: 0 auto; padding: 1.5rem 1rem; }
+  `,
+})
+export class DoctorLayout {
+  auth = inject(AuthService);
+}
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\doctors\my-patients.ts ==========
+
+import { DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { DoctorApi } from '../core/doctor-api.service';
+import { PatientSummary } from '../core/models';
+
+@Component({
+  selector: 'app-my-patients',
+  imports: [DatePipe, RouterLink],
+  template: `
+    <h1>My patients</h1>
+
+    <input
+      class="search"
+      type="search"
+      placeholder="Search by name, MRN or guardian mobile"
+      [value]="query()"
+      (input)="query.set($any($event.target).value)"
+    />
+
+    @if (error()) {
+      <p class="err">{{ error() }}</p>
+    }
+
+    @if (loading()) {
+      <p class="muted">Loading…</p>
+    } @else {
+      <p class="muted">{{ filtered().length }} patient(s)</p>
+      <div class="list">
+        @for (p of filtered(); track p.patient_id) {
+          <article class="card">
+            <div class="info">
+              <h2>{{ p.first_name }} {{ p.last_name }} <span class="muted">({{ p.mrn }})</span></h2>
+              <p>
+                {{ p.gender }} · Born {{ p.date_of_birth | date: 'd MMM y' }}
+                @if (p.blood_group) { · {{ p.blood_group }} }
+              </p>
+              <p class="muted">Guardian: {{ p.guardian_name }} · {{ p.guardian_mobile }}</p>
+            </div>
+            <div class="row">
+              <a class="secondary" [routerLink]="['/doctor/patients', p.patient_id]">History</a>
+              <a class="primary" [routerLink]="['/doctor/patients', p.patient_id, 'add-record']">Add record</a>
+            </div>
+          </article>
+        } @empty {
+          <div class="card"><p class="muted">No patients found.</p></div>
+        }
+      </div>
+    }
+  `,
+  styles: `
+    h1 { margin: 0 0 1rem; color: #1d4f91; }
+    .search { width: 100%; box-sizing: border-box; padding: .65rem; border: 1px solid #cfdcec; border-radius: 8px; margin-bottom: .5rem; }
+    .list { display: grid; gap: .75rem; }
+    .card { display: flex; justify-content: space-between; gap: 1rem; align-items: center; padding: 1rem 1.25rem; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgb(0 0 0 / 6%); }
+    .info h2 { margin: 0; font-size: 1.05rem; }
+    .info p { margin: .2rem 0; font-size: .9rem; }
+    .row { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .primary { padding: .4rem .9rem; border-radius: 8px; background: #1d4f91; color: #fff; text-decoration: none; font-size: .9rem; }
+    .secondary { padding: .4rem .9rem; border: 1px solid #1d4f91; border-radius: 8px; color: #1d4f91; text-decoration: none; font-size: .9rem; }
+    .muted { color: #5b7480; }
+    .err { color: #b3261e; }
+    @media (max-width: 600px) { .card { flex-direction: column; align-items: flex-start; } }
+  `,
+})
+export class MyPatients implements OnInit {
+  private api = inject(DoctorApi);
+
+  patients = signal<PatientSummary[]>([]);
+  query = signal('');
+  loading = signal(true);
+  error = signal<string | null>(null);
+
+  filtered = computed(() => {
+    const q = this.query().trim().toLowerCase();
+    if (!q) return this.patients();
+    return this.patients().filter((p) =>
+      [p.first_name, p.last_name, p.mrn, p.guardian_name, p.guardian_mobile]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q)),
+    );
+  });
+
+  ngOnInit() {
+    this.api.patients().subscribe({
+      next: (rows) => {
+        this.patients.set(rows);
+        this.loading.set(false);
+      },
+      error: (e: HttpErrorResponse) => {
+        this.loading.set(false);
+        this.error.set(
+          typeof e.error?.detail === 'string' ? e.error.detail : 'Could not load your patients.',
+        );
+      },
+    });
+  }
+}
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\doctors\patient-history.ts ==========
+
+import { DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { DoctorApi } from '../core/doctor-api.service';
+import { TreatmentRecord } from '../core/models';
+
+@Component({
+  selector: 'app-patient-history',
+  imports: [DatePipe, RouterLink],
+  template: `
+    <a class="back" routerLink="/doctor/patients">← Back to patients</a>
+
+    <div class="head">
+      <h1>Treatment history</h1>
+      <a class="primary" [routerLink]="['/doctor/patients', patientId, 'add-record']">Add record</a>
+    </div>
+
+    @if (error()) {
+      <p class="err">{{ error() }}</p>
+    }
+
+    @if (loading()) {
+      <p class="muted">Loading records…</p>
+    } @else {
+      @for (r of records(); track r.treatment_record_id) {
+        <article class="card">
+          <header>
+            <div>
+              <h2>{{ r.visit_date | date: 'd MMM y' }}</h2>
+              <p class="muted">{{ r.patient_name }} · {{ r.doctor_name }}</p>
+            </div>
+            <span class="badge">{{ r.record_status }}</span>
+          </header>
+
+          <p class="label">Diagnosis</p>
+          <p>{{ r.diagnosis }}</p>
+
+          @if (r.medications.length) {
+            <p class="label">Medicines</p>
+            <ul>
+              @for (m of r.medications; track $index) {
+                <li>
+                  <strong>{{ m.medication_name }}</strong>
+                  @if (m.dosage) { · {{ m.dosage }} }
+                  @if (m.frequency) { · {{ m.frequency }} }
+                  @if (m.duration) { · {{ m.duration }} }
+                  @if (m.instructions) { <div class="muted">{{ m.instructions }}</div> }
+                </li>
+              }
+            </ul>
+          }
+
+          @if (r.treatment_plan) {
+            <p class="label">Treatment plan</p>
+            <p>{{ r.treatment_plan }}</p>
+          }
+          @if (r.follow_up_date) {
+            <p class="label">Follow-up</p>
+            <p>{{ r.follow_up_date | date: 'd MMM y' }}</p>
+          }
+          @if (r.clinical_notes) {
+            <p class="label">Clinical notes</p>
+            <p>{{ r.clinical_notes }}</p>
+          }
+        </article>
+      } @empty {
+        <div class="card"><p class="muted">No treatment records for this patient yet.</p></div>
+      }
+    }
+  `,
+  styles: `
+    .back { display: inline-block; margin-bottom: .75rem; color: #1d4f91; text-decoration: none; }
+    .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    h1 { margin: 0; color: #1d4f91; }
+    .primary { padding: .5rem 1rem; border-radius: 8px; background: #1d4f91; color: #fff; text-decoration: none; }
+    .card { margin-bottom: 1rem; padding: 1.25rem; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgb(0 0 0 / 6%); }
+    .card header { display: flex; justify-content: space-between; align-items: flex-start; }
+    .card h2 { margin: 0; font-size: 1.1rem; }
+    .card p { margin: .2rem 0; }
+    .label { margin-top: .9rem; font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #1d4f91; }
+    ul { margin: .2rem 0; padding-left: 1.2rem; }
+    li { margin: .35rem 0; }
+    .badge { padding: .2rem .7rem; border-radius: 999px; font-size: .8rem; background: #e1ecf9; color: #1d4f91; text-transform: capitalize; }
+    .muted { color: #5b7480; font-size: .9rem; }
+    .err { color: #b3261e; }
+  `,
+})
+export class PatientHistory implements OnInit {
+  private api = inject(DoctorApi);
+  private route = inject(ActivatedRoute);
+
+  patientId = Number(this.route.snapshot.paramMap.get('patientId'));
+  records = signal<TreatmentRecord[]>([]);
+  loading = signal(true);
+  error = signal<string | null>(null);
+
+  ngOnInit() {
+    this.api.history(this.patientId).subscribe({
+      next: (rows) => {
+        this.records.set(rows);
+        this.loading.set(false);
+      },
+      error: (e: HttpErrorResponse) => {
+        this.loading.set(false);
+        this.error.set(
+          typeof e.error?.detail === 'string' ? e.error.detail : 'Could not load records.',
+        );
+      },
+    });
+  }
+}
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\doctors\schedule.ts ==========
+
+import { DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { DoctorApi } from '../core/doctor-api.service';
+import { Appointment } from '../core/models';
+
+@Component({
+  selector: 'app-schedule',
+  imports: [DatePipe, RouterLink],
+  template: `
+    <h1>My schedule</h1>
+
+    <div class="tabs">
+      <button type="button" [class.active]="upcomingOnly()" (click)="setTab(true)">Upcoming</button>
+      <button type="button" [class.active]="!upcomingOnly()" (click)="setTab(false)">All</button>
+    </div>
+
+    @if (error()) {
+      <p class="err">{{ error() }}</p>
+    }
+
+    @if (loading()) {
+      <p class="muted">Loading…</p>
+    } @else {
+      <div class="list">
+        @for (a of appointments(); track a.appointment_ref) {
+          <article class="card">
+            <div class="when">
+              <div class="day">{{ a.scheduled_at | date: 'd MMM' }}</div>
+              <div class="time">{{ a.scheduled_at | date: 'shortTime' }}</div>
+            </div>
+            <div class="info">
+              <h2>{{ a.patient_name }} <span class="muted">({{ a.mrn }})</span></h2>
+              @if (a.reason_for_visit) {
+                <p>Reason: {{ a.reason_for_visit }}</p>
+              }
+              <p class="muted">Ref {{ a.appointment_ref }} · {{ a.duration_minutes }} min</p>
+              <div class="row">
+                <a class="secondary" [routerLink]="['/doctor/patients', a.patient_id]">History</a>
+                <a
+                  class="primary"
+                  [routerLink]="['/doctor/patients', a.patient_id, 'add-record']"
+                  [queryParams]="{ appointmentId: a.appointment_id }"
+                >Add record</a>
+              </div>
+            </div>
+            <span class="badge" [class]="a.status">{{ a.status }}</span>
+          </article>
+        } @empty {
+          <div class="card"><p class="muted">No appointments to show.</p></div>
+        }
+      </div>
+    }
+  `,
+  styles: `
+    h1 { margin: 0 0 1rem; color: #1d4f91; }
+    .tabs { display: flex; gap: .5rem; margin-bottom: 1rem; }
+    .tabs button { padding: .45rem 1rem; border: 1px solid #1d4f91; background: #fff; color: #1d4f91; border-radius: 999px; cursor: pointer; }
+    .tabs button.active { background: #1d4f91; color: #fff; }
+    .list { display: grid; gap: .75rem; }
+    .card { display: flex; gap: 1rem; align-items: flex-start; padding: 1rem 1.25rem; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgb(0 0 0 / 6%); }
+    .when { min-width: 70px; text-align: center; padding: .5rem; background: #e8f0fa; border-radius: 10px; }
+    .day { font-weight: 700; color: #1d4f91; }
+    .time { font-size: .85rem; }
+    .info { flex: 1; }
+    .info h2 { margin: 0; font-size: 1.05rem; }
+    .info p { margin: .2rem 0; font-size: .9rem; }
+    .row { display: flex; gap: .5rem; margin-top: .6rem; }
+    .primary { padding: .4rem .9rem; border-radius: 8px; background: #1d4f91; color: #fff; text-decoration: none; font-size: .9rem; }
+    .secondary { padding: .4rem .9rem; border: 1px solid #1d4f91; border-radius: 8px; color: #1d4f91; text-decoration: none; font-size: .9rem; }
+    .badge { padding: .2rem .7rem; border-radius: 999px; font-size: .8rem; text-transform: capitalize; background: #e7eef2; color: #35505c; }
+    .badge.requested { background: #fff4d6; color: #8a5b00; }
+    .badge.confirmed { background: #dff3e4; color: #1b7f3b; }
+    .badge.completed { background: #e1ecf9; color: #1d4f91; }
+    .badge.cancelled { background: #fde4e2; color: #b3261e; }
+    .muted { color: #5b7480; }
+    .err { color: #b3261e; }
+  `,
+})
+export class Schedule implements OnInit {
+  private api = inject(DoctorApi);
+
+  appointments = signal<Appointment[]>([]);
+  upcomingOnly = signal(true);
+  loading = signal(false);
+  error = signal<string | null>(null);
+
+  ngOnInit() {
+    this.load();
+  }
+
+  setTab(upcomingOnly: boolean) {
+    this.upcomingOnly.set(upcomingOnly);
+    this.load();
+  }
+
+  private load() {
+    this.loading.set(true);
+    this.error.set(null);
+    this.api.appointments(this.upcomingOnly()).subscribe({
+      next: (rows) => {
+        this.appointments.set(rows);
+        this.loading.set(false);
+      },
+      error: (e: HttpErrorResponse) => {
+        this.loading.set(false);
+        this.error.set(
+          typeof e.error?.detail === 'string' ? e.error.detail : 'Could not load your schedule.',
+        );
+      },
+    });
+  }
+}
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\parent\book-appointment.ts ==========
+
+import { DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Appointment, DoctorPublic, PatientSummary } from '../core/models';
+import { ParentApi } from '../core/parent-api.service';
+
+@Component({
+  selector: 'app-book-appointment',
+  imports: [RouterLink, DatePipe],
+  template: `
+    <a class="back" routerLink="/guardian/find-doctor">← Back to doctors</a>
+
+    @if (booked(); as b) {
+      <section class="card success">
+        <h1>Appointment booked</h1>
+        <p>
+          <strong>{{ b.patient_name }}</strong> with <strong>{{ b.doctor_name }}</strong>
+        </p>
+        <p>
+          {{ b.scheduled_at | date: 'fullDate' }} at {{ b.scheduled_at | date: 'shortTime' }}
+          ({{ b.duration_minutes }} min)
+        </p>
+        <p>Reference: <strong>{{ b.appointment_ref }}</strong></p>
+        <div class="row">
+          <a class="primary" routerLink="/guardian/my-appointments">View my appointments</a>
+          <a class="secondary" routerLink="/guardian/find-doctor">Book another</a>
+        </div>
+      </section>
+    } @else {
+      <h1>Book an appointment</h1>
+
+      @if (doctor(); as d) {
+        <section class="card doctor">
+          <h2>Dr. {{ d.first_name }} {{ d.last_name }}</h2>
+          <p class="sub">{{ d.specialty }} · {{ d.qualification }}</p>
+          <p>Consultation fee: ₹{{ d.consultation_fee }}</p>
+          @if (d.available_days) {
+            <p class="muted">Usually available: {{ d.available_days }}</p>
+          }
+        </section>
+      }
+
+      @if (loading()) {
+        <p class="muted">Loading…</p>
+      } @else {
+        <section class="card">
+          <label>
+            Child
+            <select (change)="onChild($event)">
+              <option value="">Select a child</option>
+              @for (c of children(); track c.patient_id) {
+                <option [value]="c.patient_id" [selected]="patientId() === c.patient_id">
+                  {{ c.first_name }} {{ c.last_name }} ({{ c.mrn }})
+                </option>
+              }
+            </select>
+          </label>
+          @if (children().length === 0) {
+            <p class="err">No children were found on your account.</p>
+          }
+
+          <label>
+            Date
+            <input type="date" [min]="today" [value]="date()" (change)="onDate($event)" />
+          </label>
+
+          @if (date()) {
+            <div class="slots-box">
+              <p class="label">Available times</p>
+              @if (loadingSlots()) {
+                <p class="muted">Checking availability…</p>
+              } @else if (slots().length === 0) {
+                <p class="muted">No free slots on this date. Try another day.</p>
+              } @else {
+                <div class="slots">
+                  @for (s of slots(); track s) {
+                    <button
+                      type="button"
+                      class="slot"
+                      [class.selected]="slot() === s"
+                      (click)="slot.set(s)"
+                    >
+                      {{ s }}
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          }
+
+          <label>
+            Reason for visit (optional)
+            <textarea
+              rows="3"
+              maxlength="255"
+              [value]="reason()"
+              (input)="onReason($event)"
+              placeholder="e.g. Fever for two days"
+            ></textarea>
+          </label>
+
+          @if (error()) {
+            <p class="err">{{ error() }}</p>
+          }
+
+          <button type="button" class="primary wide" [disabled]="!canBook() || submitting()" (click)="submit()">
+            {{ submitting() ? 'Booking…' : 'Confirm booking' }}
+          </button>
+        </section>
+      }
+    }
+  `,
+  styles: `
+    .back { display: inline-block; margin-bottom: .75rem; color: #0b6e8a; text-decoration: none; }
+    h1 { margin: 0 0 1rem; color: #0b6e8a; }
+    h2 { margin: 0; font-size: 1.15rem; }
+    .card { margin-bottom: 1rem; padding: 1.25rem; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgb(0 0 0 / 6%); }
+    .card p { margin: .25rem 0; }
+    .sub { color: #0b6e8a; font-weight: 600; }
+    .muted { color: #5b7480; font-size: .9rem; }
+    .err { color: #b3261e; font-size: .9rem; }
+    label { display: block; margin-top: 1rem; font-size: .9rem; }
+    input, select, textarea { width: 100%; box-sizing: border-box; margin-top: .25rem; padding: .6rem; border: 1px solid #cfe3ec; border-radius: 8px; background: #fff; font-family: inherit; }
+    .label { margin: 1rem 0 .4rem; font-size: .9rem; }
+    .slots { display: flex; flex-wrap: wrap; gap: .5rem; }
+    .slot { padding: .45rem .9rem; border: 1px solid #0b6e8a; background: #fff; color: #0b6e8a; border-radius: 999px; cursor: pointer; }
+    .slot.selected { background: #0b6e8a; color: #fff; }
+    .primary { display: inline-block; padding: .65rem 1.2rem; border: 0; border-radius: 8px; background: #0b6e8a; color: #fff; text-decoration: none; cursor: pointer; text-align: center; }
+    .primary:disabled { opacity: .5; cursor: not-allowed; }
+    .wide { width: 100%; box-sizing: border-box; margin-top: 1.25rem; }
+    .secondary { display: inline-block; padding: .65rem 1.2rem; border: 1px solid #0b6e8a; background: #fff; color: #0b6e8a; border-radius: 8px; text-decoration: none; }
+    .row { display: flex; gap: .75rem; margin-top: 1rem; flex-wrap: wrap; }
+    .success h1 { color: #1b7f3b; }
+  `,
+})
+export class BookAppointment implements OnInit {
+  private api = inject(ParentApi);
+  private route = inject(ActivatedRoute);
+
+  doctorId = Number(this.route.snapshot.paramMap.get('doctorId'));
+  today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+
+  doctor = signal<DoctorPublic | null>(null);
+  children = signal<PatientSummary[]>([]);
+  slots = signal<string[]>([]);
+
+  patientId = signal<number | null>(null);
+  date = signal('');
+  slot = signal<string | null>(null);
+  reason = signal('');
+
+  loading = signal(true);
+  loadingSlots = signal(false);
+  submitting = signal(false);
+  error = signal<string | null>(null);
+  booked = signal<Appointment | null>(null);
+
+  canBook = computed(() => this.patientId() !== null && !!this.date() && !!this.slot());
+
+  ngOnInit() {
+    if (!Number.isInteger(this.doctorId)) {
+      this.error.set('Invalid doctor.');
+      this.loading.set(false);
+      return;
+    }
+
+    this.api.doctor(this.doctorId).subscribe({
+      next: (d) => this.doctor.set(d),
+      error: (e) => this.error.set(this.errorText(e, 'Could not load this doctor.')),
+    });
+
+    this.api.myChildren().subscribe({
+      next: (rows) => {
+        this.children.set(rows);
+        if (rows.length === 1) this.patientId.set(rows[0].patient_id);
+        this.loading.set(false);
+      },
+      error: (e) => {
+        this.loading.set(false);
+        this.error.set(this.errorText(e, 'Could not load your children.'));
+      },
+    });
+  }
+
+  onChild(event: Event) {
+    const value = (event.target as HTMLSelectElement).value;
+    this.patientId.set(value ? Number(value) : null);
+  }
+
+  onDate(event: Event) {
+    const value = (event.target as HTMLInputElement).value;
+    this.date.set(value);
+    this.slot.set(null);
+    this.error.set(null);
+    if (value) this.loadSlots();
+    else this.slots.set([]);
+  }
+
+  onReason(event: Event) {
+    this.reason.set((event.target as HTMLTextAreaElement).value);
+  }
+
+  private loadSlots() {
+    this.loadingSlots.set(true);
+    this.api.slots(this.doctorId, this.date()).subscribe({
+      next: (res) => {
+        this.slots.set(res.slots);
+        this.loadingSlots.set(false);
+      },
+      error: (e) => {
+        this.slots.set([]);
+        this.loadingSlots.set(false);
+        this.error.set(this.errorText(e, 'Could not load time slots.'));
+      },
+    });
+  }
+
+  submit() {
+    if (!this.canBook()) return;
+    this.submitting.set(true);
+    this.error.set(null);
+
+    this.api
+      .book({
+        doctor_id: this.doctorId,
+        patient_id: this.patientId()!,
+        scheduled_at: `${this.date()}T${this.slot()}:00`,
+        reason_for_visit: this.reason().trim() || null,
+      })
+      .subscribe({
+        next: (appointment) => {
+          this.submitting.set(false);
+          this.booked.set(appointment);
+        },
+        error: (e) => {
+          this.submitting.set(false);
+          this.error.set(this.errorText(e, 'Booking failed. Please try again.'));
+          // The slot may have just been taken, so refresh the list.
+          this.slot.set(null);
+          this.loadSlots();
+        },
+      });
+  }
+
+  private errorText(err: HttpErrorResponse, fallback: string): string {
+    const detail = err.error?.detail;
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) {
+      return detail.map((d: { msg: string }) => d.msg).join('; ');
+    }
+    return err.status === 0 ? 'Cannot reach the server. Is the backend running?' : fallback;
+  }
+}
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\parent\find-doctor.ts ==========
+
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { NonNullableFormBuilder, ReactiveFormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { DoctorPublic, SpecialtyCount } from '../core/models';
+import { ParentApi } from '../core/parent-api.service';
+
+@Component({
+ selector: 'app-find-doctor',
+  imports: [ReactiveFormsModule, RouterLink],
+  template: `
+    <h1>Find a doctor</h1>
+
+    <form class="filters" [formGroup]="filters" (ngSubmit)="search()">
+      <label>
+        Specialty
+        <select formControlName="specialty">
+          <option value="">All specialties</option>
+          @for (s of specialties(); track s.specialty) {
+            <option [value]="s.specialty">{{ s.specialty }} ({{ s.doctor_count }})</option>
+          }
+        </select>
+      </label>
+
+      <label>
+        Language
+        <input formControlName="language" placeholder="e.g. Bengali" />
+      </label>
+
+      <label>
+        Max fee (₹)
+        <input type="number" min="0" formControlName="max_fee" placeholder="Any" />
+      </label>
+
+      <label>
+        Day
+        <select formControlName="day">
+          <option value="">Any day</option>
+          @for (d of days; track d) {
+            <option [value]="d">{{ d }}</option>
+          }
+        </select>
+      </label>
+
+      <div class="actions">
+        <button type="submit" class="primary" [disabled]="loading()">Search</button>
+        <button type="button" class="secondary" (click)="reset()">Reset</button>
+      </div>
+    </form>
+
+    @if (error()) {
+      <p class="err">{{ error() }}</p>
+    }
+
+    @if (loading()) {
+      <p class="muted">Loading doctors…</p>
+    } @else {
+      <p class="muted">{{ doctors().length }} doctor(s) found</p>
+
+      <div class="list">
+        @for (d of doctors(); track d.doctor_id) {
+          <article class="card">
+            <div class="info">
+              <h2>Dr. {{ d.first_name }} {{ d.last_name }}</h2>
+              <p class="sub">{{ d.specialty }} · {{ d.qualification }}</p>
+              <p>{{ d.experience_years }} years of experience</p>
+              @if (d.languages) {
+                <p>Languages: {{ d.languages }}</p>
+              }
+              @if (d.available_days) {
+                <p>Available: {{ d.available_days }}</p>
+              }
+            </div>
+            <div class="side">
+              <div class="fee">₹{{ d.consultation_fee }}</div>
+              <a class="primary" [routerLink]="['/guardian/book', d.doctor_id]">Book appointment</a>
+            </div>
+          </article>
+        } @empty {
+          <p class="muted">No doctors match these filters.</p>
+        }
+      </div>
+    }
+  `,
+  styles: `
+    h1 { margin: 0 0 1rem; color: #0b6e8a; }
+    .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .75rem 1rem; align-items: end; padding: 1rem; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgb(0 0 0 / 6%); }
+    label { display: block; font-size: .85rem; }
+    input, select { width: 100%; box-sizing: border-box; margin-top: .25rem; padding: .55rem; border: 1px solid #cfe3ec; border-radius: 8px; background: #fff; }
+    .actions { display: flex; gap: .5rem; }
+    .primary { display: inline-block; padding: .55rem 1rem; border: 0; border-radius: 8px; background: #0b6e8a; color: #fff; text-decoration: none; cursor: pointer; font-size: .9rem; }
+    .primary:disabled { opacity: .5; cursor: not-allowed; }
+    .secondary { padding: .55rem 1rem; border: 1px solid #0b6e8a; background: #fff; color: #0b6e8a; border-radius: 8px; cursor: pointer; }
+    .muted { color: #5b7480; font-size: .9rem; }
+    .err { color: #b3261e; }
+    .list { display: grid; gap: .75rem; }
+    .card { display: flex; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgb(0 0 0 / 6%); }
+    .card h2 { margin: 0; font-size: 1.1rem; }
+    .card p { margin: .2rem 0; font-size: .9rem; }
+    .sub { color: #0b6e8a; font-weight: 600; }
+    .side { display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; gap: .5rem; }
+    .fee { font-size: 1.3rem; font-weight: 700; }
+    @media (max-width: 560px) { .card { flex-direction: column; } .side { align-items: flex-start; } }
+  `,
+})
+export class FindDoctors implements OnInit {
+  private api = inject(ParentApi);
+  private fb = inject(NonNullableFormBuilder);
+
+  days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  specialties = signal<SpecialtyCount[]>([]);
+  doctors = signal<DoctorPublic[]>([]);
+  loading = signal(false);
+  error = signal<string | null>(null);
+
+  filters = this.fb.group({
+    specialty: '',
+    language: '',
+    max_fee: '',
+    day: '',
+  });
+
+  ngOnInit() {
+    this.api.specialties().subscribe({
+      next: (rows) => this.specialties.set(rows),
+      error: () => {}, // the filter still works without the dropdown counts
+    });
+    this.search();
+  }
+
+  search() {
+    const f = this.filters.getRawValue();
+    this.loading.set(true);
+    this.error.set(null);
+
+    this.api
+      .doctors({
+        specialty: f.specialty,
+        language: f.language,
+        day: f.day,
+        max_fee: f.max_fee === '' ? null : Number(f.max_fee),
+      })
+      .subscribe({
+        next: (rows) => {
+          this.doctors.set(rows);
+          this.loading.set(false);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.loading.set(false);
+          this.error.set(
+            typeof err.error?.detail === 'string'
+              ? err.error.detail
+              : 'Could not load doctors. Is the backend running?',
+          );
+        },
+      });
+  }
+
+  reset() {
+    this.filters.reset();
+    this.search();
+  }
+}
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\parent\my-appointments.ts ==========
+
+import { DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { Appointment } from '../core/models';
+import { ParentApi } from '../core/parent-api.service';
+
+@Component({
+  selector: 'app-my-appointments',
+  imports: [DatePipe, RouterLink],
+  template: `
+    <h1>My appointments</h1>
+
+    <div class="tabs">
+      <button type="button" [class.active]="upcomingOnly()" (click)="setTab(true)">Upcoming</button>
+      <button type="button" [class.active]="!upcomingOnly()" (click)="setTab(false)">All</button>
+    </div>
+
+    @if (error()) {
+      <p class="err">{{ error() }}</p>
+    }
+
+    @if (loading()) {
+      <p class="muted">Loading…</p>
+    } @else {
+      <div class="list">
+        @for (a of appointments(); track a.appointment_ref) {
+          <article class="card">
+            <div class="when">
+              <div class="day">{{ a.scheduled_at | date: 'd MMM' }}</div>
+              <div class="time">{{ a.scheduled_at | date: 'shortTime' }}</div>
+            </div>
+
+            <div class="info">
+              <h2>{{ a.doctor_name }}</h2>
+              <p>For {{ a.patient_name }} <span class="muted">({{ a.mrn }})</span></p>
+              @if (a.reason_for_visit) {
+                <p class="muted">Reason: {{ a.reason_for_visit }}</p>
+              }
+              <p class="muted">Ref {{ a.appointment_ref }} · {{ a.duration_minutes }} min</p>
+            </div>
+
+            <div class="side">
+              <span class="badge" [class]="a.status">{{ a.status }}</span>
+
+              @if (canCancel(a)) {
+                @if (confirming() === a.appointment_ref) {
+                  <div class="confirm">
+                    <span>Cancel this appointment?</span>
+                    <button type="button" class="danger" [disabled]="cancelling()" (click)="cancel(a)">
+                      {{ cancelling() ? 'Cancelling…' : 'Yes, cancel' }}
+                    </button>
+                    <button type="button" class="secondary" (click)="confirming.set(null)">Keep</button>
+                  </div>
+                } @else {
+                  <button type="button" class="secondary" (click)="confirming.set(a.appointment_ref)">
+                    Cancel
+                  </button>
+                }
+              }
+            </div>
+          </article>
+        } @empty {
+          <div class="card empty">
+            <p>No appointments to show.</p>
+            <a class="primary" routerLink="/guardian/find-doctor">Find a doctor</a>
+          </div>
+        }
+      </div>
+    }
+  `,
+  styles: `
+    h1 { margin: 0 0 1rem; color: #0b6e8a; }
+    .tabs { display: flex; gap: .5rem; margin-bottom: 1rem; }
+    .tabs button { padding: .45rem 1rem; border: 1px solid #0b6e8a; background: #fff; color: #0b6e8a; border-radius: 999px; cursor: pointer; }
+    .tabs button.active { background: #0b6e8a; color: #fff; }
+    .list { display: grid; gap: .75rem; }
+    .card { display: flex; gap: 1rem; align-items: flex-start; padding: 1rem 1.25rem; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgb(0 0 0 / 6%); }
+    .when { min-width: 70px; text-align: center; padding: .5rem; background: #eaf5f9; border-radius: 10px; }
+    .day { font-weight: 700; color: #0b6e8a; }
+    .time { font-size: .85rem; }
+    .info { flex: 1; }
+    .info h2 { margin: 0; font-size: 1.05rem; }
+    .info p { margin: .2rem 0; font-size: .9rem; }
+    .side { display: flex; flex-direction: column; align-items: flex-end; gap: .5rem; }
+    .badge { padding: .2rem .7rem; border-radius: 999px; font-size: .8rem; text-transform: capitalize; background: #e7eef2; color: #35505c; }
+    .badge.requested { background: #fff4d6; color: #8a5b00; }
+    .badge.confirmed { background: #dff3e4; color: #1b7f3b; }
+    .badge.completed { background: #e1ecf9; color: #1d4f91; }
+    .badge.cancelled { background: #fde4e2; color: #b3261e; }
+    .confirm { display: flex; flex-direction: column; align-items: flex-end; gap: .35rem; font-size: .85rem; }
+    .secondary { padding: .4rem .9rem; border: 1px solid #0b6e8a; background: #fff; color: #0b6e8a; border-radius: 8px; cursor: pointer; }
+    .danger { padding: .4rem .9rem; border: 0; background: #b3261e; color: #fff; border-radius: 8px; cursor: pointer; }
+    .danger:disabled { opacity: .5; }
+    .primary { display: inline-block; padding: .55rem 1rem; border-radius: 8px; background: #0b6e8a; color: #fff; text-decoration: none; }
+    .empty { flex-direction: column; align-items: center; }
+    .muted { color: #5b7480; }
+    .err { color: #b3261e; }
+    @media (max-width: 600px) { .card { flex-wrap: wrap; } .side { align-items: flex-start; } }
+  `,
+})
+export class MyAppointments implements OnInit {
+  private api = inject(ParentApi);
+
+  appointments = signal<Appointment[]>([]);
+  upcomingOnly = signal(true);
+  loading = signal(false);
+  cancelling = signal(false);
+  confirming = signal<string | null>(null);
+  error = signal<string | null>(null);
+
+  ngOnInit() {
+    this.load();
+  }
+
+  setTab(upcomingOnly: boolean) {
+    this.upcomingOnly.set(upcomingOnly);
+    this.confirming.set(null);
+    this.load();
+  }
+
+  canCancel(a: Appointment): boolean {
+    return a.status !== 'cancelled' && a.status !== 'completed';
+  }
+
+  load() {
+    this.loading.set(true);
+    this.error.set(null);
+    this.api.appointments(this.upcomingOnly()).subscribe({
+      next: (rows) => {
+        this.appointments.set(rows);
+        this.loading.set(false);
+      },
+      error: (e) => {
+        this.loading.set(false);
+        this.error.set(this.errorText(e, 'Could not load appointments.'));
+      },
+    });
+  }
+
+  cancel(appointment: Appointment) {
+    this.cancelling.set(true);
+    this.error.set(null);
+    this.api.cancel(appointment.appointment_ref, null).subscribe({
+      next: (updated) => {
+        this.cancelling.set(false);
+        this.confirming.set(null);
+        this.appointments.update((list) =>
+          list.map((a) => (a.appointment_ref === updated.appointment_ref ? updated : a)),
+        );
+      },
+      error: (e) => {
+        this.cancelling.set(false);
+        this.error.set(this.errorText(e, 'Could not cancel this appointment.'));
+      },
+    });
+  }
+
+  private errorText(err: HttpErrorResponse, fallback: string): string {
+    const detail = err.error?.detail;
+    if (typeof detail === 'string') return detail;
+    return err.status === 0 ? 'Cannot reach the server. Is the backend running?' : fallback;
+  }
+}
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\parent\parent-layout.ts ==========
+
+import { Component, inject } from '@angular/core';
+import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { AuthService } from '../core/auth.service';
+
+@Component({
+  selector: 'app-parent-layout',
+  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  template: `
+    <header class="bar">
+      <a class="brand" routerLink="/guardian">Pedia Centre</a>
+      <nav>
+        <a routerLink="/guardian/find-doctor" routerLinkActive="active">Find a doctor</a>
+        <a routerLink="/guardian/appointments" routerLinkActive="active">My appointments</a>
+      </nav>
+      <button type="button" class="logout" (click)="auth.logout()">Log out</button>
+    </header>
+    <main class="content">
+      <router-outlet />
+    </main>
+  `,
+  styles: `
+    :host { display: block; min-height: 100vh; background: #f2f7fb; font-family: system-ui, sans-serif; }
+    .bar { display: flex; align-items: center; gap: 1.5rem; padding: .75rem 1.5rem; background: #0b6e8a; color: #fff; }
+    .brand { font-weight: 700; font-size: 1.2rem; color: #fff; text-decoration: none; }
+    nav { display: flex; gap: 1rem; flex: 1; }
+    nav a { color: #d7eef5; text-decoration: none; padding: .35rem .6rem; border-radius: 6px; }
+    nav a.active, nav a:hover { background: rgb(255 255 255 / 18%); color: #fff; }
+    .logout { border: 1px solid rgb(255 255 255 / 60%); background: transparent; color: #fff; padding: .4rem .9rem; border-radius: 8px; cursor: pointer; }
+    .content { max-width: 960px; margin: 0 auto; padding: 1.5rem 1rem; }
+  `,
+})
+export class ParentLayout {
+  auth = inject(AuthService);
+}
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\parent\treatment-history.ts ==========
+
+
+import { DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, OnInit, inject, signal } from '@angular/core';
+
+import { PatientSummary } from '../core/models';
+import { ParentApi } from '../core/parent-api.service';
+
+@Component({
+  selector: 'app-treatment-history',
+  standalone: true,
+  imports: [DatePipe],
+
+  template: `
+    <h1>Treatment history</h1>
+
+    <section class="card">
+      <label>
+        Child
+
+        <select (change)="onChild($event)">
+          <option value="">Select a child</option>
+
+          @for (c of children(); track c.patient_id) {
+            <option
+              [value]="c.patient_id"
+              [selected]="patientId() === c.patient_id"
+            >
+              {{ c.first_name }} {{ c.last_name }} ({{ c.mrn }})
+            </option>
+          }
+        </select>
+      </label>
+    </section>
+
+    @if (error()) {
+      <p class="err">{{ error() }}</p>
+    }
+
+    @if (loading()) {
+      <p class="muted">Loading records…</p>
+    } @else if (patientId() !== null) {
+
+      @for (r of records(); track r.treatment_record_id) {
+        <article class="card record">
+
+          <header>
+            <div>
+              <h2>{{ r.visit_date | date: 'd MMM y' }}</h2>
+              <p class="muted">{{ r.doctor_name }}</p>
+            </div>
+
+            <span class="badge">{{ r.record_status }}</span>
+          </header>
+
+          <p class="label">Diagnosis</p>
+          <p>{{ r.diagnosis }}</p>
+
+          @if (r.medications?.length) {
+            <p class="label">Medicines</p>
+
+            <ul>
+              @for (m of r.medications; track $index) {
+                <li>
+                  <strong>{{ m.medication_name }}</strong>
+
+                  @if (m.dosage) {
+                    · {{ m.dosage }}
+                  }
+
+                  @if (m.frequency) {
+                    · {{ m.frequency }}
+                  }
+
+                  @if (m.duration) {
+                    · {{ m.duration }}
+                  }
+
+                  @if (m.instructions) {
+                    <div class="muted">
+                      {{ m.instructions }}
+                    </div>
+                  }
+                </li>
+              }
+            </ul>
+          }
+
+          @if (r.treatment_plan) {
+            <p class="label">Treatment plan</p>
+            <p>{{ r.treatment_plan }}</p>
+          }
+
+          @if (r.follow_up_date) {
+            <p class="label">Follow-up</p>
+            <p>{{ r.follow_up_date | date: 'd MMM y' }}</p>
+          }
+
+          @if (r.clinical_notes) {
+            <p class="label">Doctor's notes</p>
+            <p>{{ r.clinical_notes }}</p>
+          }
+
+        </article>
+      } @empty {
+        <div class="card">
+          <p class="muted">
+            No treatment records for this child yet.
+          </p>
+        </div>
+      }
+    }
+  `,
+
+  styles: `
+    h1 {
+      margin: 0 0 1rem;
+      color: #0b6e8a;
+    }
+
+    .card {
+      margin-bottom: 1rem;
+      padding: 1.25rem;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgb(0 0 0 / 6%);
+    }
+
+    label {
+      display: block;
+      font-size: .9rem;
+    }
+
+    select {
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: .25rem;
+      padding: .6rem;
+      border: 1px solid #cfe3ec;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .record header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .record h2 {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+
+    .record p {
+      margin: .2rem 0;
+    }
+
+    .label {
+      margin-top: .9rem;
+      font-size: .8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: #0b6e8a;
+    }
+
+    ul {
+      margin: .2rem 0;
+      padding-left: 1.2rem;
+    }
+
+    li {
+      margin: .35rem 0;
+    }
+
+    .badge {
+      padding: .2rem .7rem;
+      border-radius: 999px;
+      font-size: .8rem;
+      background: #e1ecf9;
+      color: #1d4f91;
+      text-transform: capitalize;
+    }
+
+    .muted {
+      color: #5b7480;
+      font-size: .9rem;
+    }
+
+    .err {
+      color: #b3261e;
+    }
+  `,
+})
+export class TreatmentHistory implements OnInit {
+
+  private api = inject(ParentApi);
+
+  children = signal<PatientSummary[]>([]);
+  patientId = signal<number | null>(null);
+  records = signal<any[]>([]);
+
+  loading = signal(false);
+  error = signal<string | null>(null);
+
+  ngOnInit(): void {
+    this.api.myChildren().subscribe({
+      next: (rows: PatientSummary[]) => {
+        this.children.set(rows);
+
+        if (rows.length === 1) {
+          this.patientId.set(rows[0].patient_id);
+          this.load();
+        }
+      },
+
+      error: (e: HttpErrorResponse) => {
+        this.error.set(
+          this.errorText(e, 'Could not load your children.')
+        );
+      },
+    });
+  }
+
+  onChild(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+
+    this.patientId.set(value ? Number(value) : null);
+    this.records.set([]);
+
+    if (value) {
+      this.load();
+    }
+  }
+
+  private load(): void {
+    const id = this.patientId();
+
+    if (id === null) {
+      return;
+    }
+
+    this.loading.set(true);
+    this.error.set(null);
+
+    this.api.treatmentHistory(id).subscribe({
+      next: (rows: any[]) => {
+        this.records.set(rows);
+        this.loading.set(false);
+      },
+
+      error: (e: HttpErrorResponse) => {
+        this.loading.set(false);
+
+        this.error.set(
+          this.errorText(e, 'Could not load treatment records.')
+        );
+      },
+    });
+  }
+
+  private errorText(
+    err: HttpErrorResponse,
+    fallback: string
+  ): string {
+    const detail = err.error?.detail;
+
+    if (typeof detail === 'string') {
+      return detail;
+    }
+
+    return err.status === 0
+      ? 'Cannot reach the server. Is the backend running?'
+      : fallback;
+  }
+}
+
+
+
+========== C:\Users\asus\pedia-centre-frontend\src\app\shell\home.ts ==========
+
+import { Component, inject } from '@angular/core';
+import { AuthService } from '../core/auth.service';
+
+@Component({
+  selector: 'app-home',
+  template: `
+    <main style="padding: 2rem; font-family: system-ui, sans-serif">
+      <h1>Welcome{{ auth.session()?.name ? ', ' + auth.session()?.name : '' }}</h1>
+      <p>Signed in as <strong>{{ auth.role() }}</strong> (id {{ auth.session()?.userId }})</p>
+      <button (click)="auth.logout()">Log out</button>
+    </main>
+  `,
+})
+export class Home {
+  auth = inject(AuthService);
+}

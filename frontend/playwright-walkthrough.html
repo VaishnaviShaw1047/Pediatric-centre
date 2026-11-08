@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Playwright testing walkthrough — Pedia Centre frontend</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 18mm 20mm 18mm;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      color: #222;
+      font-family: "Georgia", "Times New Roman", serif;
+      font-size: 12pt;
+      line-height: 1.55;
+    }
+    h1 {
+      font-family: "Calibri", "Segoe UI", sans-serif;
+      font-size: 22pt;
+      font-weight: 700;
+      line-height: 1.25;
+      margin: 0 0 8px;
+      color: #111;
+    }
+    h2 {
+      font-family: "Calibri", "Segoe UI", sans-serif;
+      font-size: 15pt;
+      margin: 22px 0 8px;
+      padding-top: 6px;
+      border-top: 1px solid #ccc;
+      color: #111;
+      page-break-after: avoid;
+    }
+    h3 {
+      font-family: "Calibri", "Segoe UI", sans-serif;
+      font-size: 12.5pt;
+      margin: 16px 0 6px;
+      color: #222;
+      page-break-after: avoid;
+    }
+    p { margin: 0 0 10px; }
+    ul, ol { margin: 0 0 12px; padding-left: 22px; }
+    li { margin-bottom: 4px; }
+    .meta {
+      font-family: "Calibri", "Segoe UI", sans-serif;
+      font-size: 11pt;
+      color: #444;
+      margin-bottom: 22px;
+    }
+    .note {
+      font-family: "Calibri", "Segoe UI", sans-serif;
+      font-size: 11pt;
+      background: #f4f4f4;
+      border-left: 3px solid #555;
+      padding: 8px 12px;
+      margin: 12px 0;
+    }
+    pre, code, .tree {
+      font-family: Consolas, "Courier New", monospace;
+    }
+    code {
+      font-size: 10.5pt;
+      background: #f3f3f3;
+      padding: 1px 4px;
+    }
+    pre {
+      font-size: 10pt;
+      line-height: 1.4;
+      background: #f6f6f6;
+      border: 1px solid #ddd;
+      padding: 10px 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin: 8px 0 14px;
+      page-break-inside: avoid;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: "Calibri", "Segoe UI", sans-serif;
+      font-size: 10.5pt;
+      line-height: 1.4;
+      margin: 8px 0 14px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      text-align: left;
+      vertical-align: top;
+      padding: 6px 8px;
+    }
+    th { background: #eee; font-weight: 700; }
+    .tree {
+      font-size: 10pt;
+      line-height: 1.4;
+      background: #f6f6f6;
+      border: 1px solid #ddd;
+      padding: 10px 12px;
+      white-space: pre;
+      margin: 8px 0 14px;
+      overflow: hidden;
+    }
+    .cover-rule {
+      border: none;
+      border-top: 2px solid #222;
+      margin: 10px 0 16px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>How Playwright was used to test the Pedia Centre frontend</h1>
+<p class="meta">
+  Project: pedia-centre-frontend<br>
+  Tool: Playwright 1.65 (Google Chrome)<br>
+  Suite: 29 end-to-end tests in tests/e2e
+</p>
+<hr class="cover-rule" />
+
+<h2>1. What Playwright is doing</h2>
+<p>
+  Playwright is a browser automation tool. It is not a unit tester. For this project it opens Chrome,
+  loads the Angular app at http://localhost:4200, and behaves like a user: it clicks buttons, fills
+  forms, follows routes, and checks that the screen shows the expected text and URLs.
+</p>
+<p>
+  The Angular app still thinks it is talking to FastAPI at http://127.0.0.1:8000/api/v1.
+  Playwright intercepts every matching request inside the browser and returns fake JSON.
+  That is why the suite can run without the Python backend, a database, or real users.
+</p>
+<p>A typical test run does this:</p>
+<ol>
+  <li>playwright.config.ts starts Angular with <code>npm start</code> and waits for port 4200 (unless the app is already running).</li>
+  <li>Chrome launches. Each test gets a fresh page and empty storage.</li>
+  <li><code>mockBackend(page)</code> stubs all <code>**/api/v1/**</code> calls.</li>
+  <li>The test navigates, clicks, and types as a parent, doctor, or admin.</li>
+  <li><code>expect()</code> checks URLs, headings, errors, and success messages.</li>
+</ol>
+<p>
+  These tests prove routing, role guards, form validation, and that each role area can complete its
+  main jobs against mocked data. They do not prove real FastAPI rules, real JWT signing, or live
+  database behaviour.
+</p>
+
+<h2>2. Installation</h2>
+<p>Playwright was added as a development dependency of this Angular repo:</p>
+<pre>npm install -D @playwright/test
+npx playwright install chrome</pre>
+<p>
+  The first command added <code>"@playwright/test": "^1.65.0"</code> to package.json.
+  The second installs the Chrome channel that the config uses (<code>channel: 'chrome'</code>).
+  If Chrome is not installed, either install Chrome or switch the config to Playwright’s Chromium
+  and run <code>npx playwright install chromium</code>.
+</p>
+<p>These scripts were added to package.json:</p>
+<pre>"test:e2e": "playwright test",
+"test:e2e:ui": "playwright test --ui"</pre>
+<p>
+  Angular’s own <code>npm test</code> was left as unit tests. End-to-end is a separate command.
+  Generated output is ignored in .gitignore: test-results/, playwright-report/, blob-report/,
+  playwright/.cache/, and playwright/.auth/.
+</p>
+
+<h2>3. Where the files sit</h2>
+<p>
+  Test code lives at the repo root under tests/, next to src/, not inside Angular components.
+  playwright.config.ts sets <code>testDir</code> to ./tests/e2e, so only *.spec.ts files there are executed.
+  Helpers and page objects are imported; they are not run as tests.
+</p>
+<div class="tree">pedia-centre-frontend/
+├── playwright.config.ts     engine: URL, browser, webServer, reporters
+├── package.json             @playwright/test and test:e2e scripts
+├── src/app/                 Angular UI under test
+└── tests/
+    ├── e2e/                 executed specs
+    │   ├── smoke.spec.ts
+    │   ├── auth.spec.ts
+    │   ├── register.spec.ts
+    │   ├── access-control.spec.ts
+    │   ├── guardian.spec.ts
+    │   ├── doctor.spec.ts
+    │   └── admin.spec.ts
+    ├── helpers/
+    │   ├── fixtures.ts      fake JSON (doctors, children, appointments)
+    │   ├── jwt.ts           tiny unsigned JWT AuthService can decode
+    │   ├── session.ts       TEST_USERS and seedSession()
+    │   └── mocks.ts         page.route('**/api/v1/**')
+    └── pages/
+        └── login.page.ts    page object for the login screen</div>
+
+<table>
+  <thead>
+    <tr><th>File</th><th>Job</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>playwright.config.ts</td><td>How to run: baseURL, Chrome, start Angular, one worker</td></tr>
+    <tr><td>tests/helpers/fixtures.ts</td><td>Stable fake clinic data (Dr Meera Shah, Aarav, APT-501, and so on)</td></tr>
+    <tr><td>tests/helpers/jwt.ts</td><td>Builds a three-part token with sub and exp</td></tr>
+    <tr><td>tests/helpers/session.ts</td><td>Known users; writes pc_session into localStorage</td></tr>
+    <tr><td>tests/helpers/mocks.ts</td><td>In-browser fake REST API</td></tr>
+    <tr><td>tests/pages/login.page.ts</td><td>Reusable clicks for role, identifier, password, Sign in</td></tr>
+  </tbody>
+</table>
+
+<h2>4. What playwright.config.ts means</h2>
+<table>
+  <thead>
+    <tr><th>Setting</th><th>Value</th><th>Why</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>testDir</td><td>./tests/e2e</td><td>Only specs run</td></tr>
+    <tr><td>fullyParallel</td><td>false</td><td>Keep order simple</td></tr>
+    <tr><td>workers</td><td>1</td><td>One Chrome at a time</td></tr>
+    <tr><td>retries</td><td>2 on CI, 0 locally</td><td>Retry flakes only in CI</td></tr>
+    <tr><td>baseURL</td><td>http://localhost:4200</td><td>page.goto('/login') hits ng serve</td></tr>
+    <tr><td>trace / screenshot / video</td><td>on failure</td><td>Debug a failed test</td></tr>
+    <tr><td>projects</td><td>chromium + channel chrome</td><td>Desktop Chrome only</td></tr>
+    <tr><td>webServer.command</td><td>npm start</td><td>Boot ng serve if port 4200 is down</td></tr>
+    <tr><td>reuseExistingServer</td><td>true locally</td><td>Reuse an already running ng serve</td></tr>
+    <tr><td>reporter</td><td>list + html</td><td>Terminal output plus playwright-report/index.html</td></tr>
+  </tbody>
+</table>
+<p>
+  The webServer timeout is 120 seconds because the first Angular compile can be slow.
+  Playwright waits until port 4200 answers before any spec starts.
+</p>
+
+<h2>5. Fake users, JWT, and API mocks</h2>
+<h3>Test accounts (tests/helpers/session.ts)</h3>
+<table>
+  <thead>
+    <tr><th>Role</th><th>Identifier</th><th>Password</th><th>userId</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>guardian / parent</td><td>9876543210</td><td>Parent@123</td><td>11</td></tr>
+    <tr><td>doctor</td><td>DOC001</td><td>Doctor@123</td><td>21</td></tr>
+    <tr><td>admin</td><td>admin</td><td>Admin@123</td><td>1</td></tr>
+  </tbody>
+</table>
+<p>
+  A second doctor login exists only in the mock: DOC-TEMP / Temp@1234 returns
+  <code>must_change_password: true</code>.
+</p>
+
+<h3>Fake JWT (tests/helpers/jwt.ts)</h3>
+<p>
+  AuthService does not verify a server signature. It only needs a three-part token whose payload
+  JSON has <code>sub</code> (user id) and <code>exp</code> (unix expiry). The helper base64url-encodes
+  a header and payload and appends the dummy string <code>test-signature</code>.
+</p>
+
+<h3>How mockBackend works (tests/helpers/mocks.ts)</h3>
+<pre>await page.route('**/api/v1/**', async (route) => { ... });</pre>
+<p>
+  Angular HttpClient still posts to http://127.0.0.1:8000/api/v1/.... Playwright matches that URL
+  pattern, reads method and path, and returns JSON with <code>route.fulfill()</code>. Anything unmapped
+  returns 404 with “Unmocked METHOD path”, so a missing stub is obvious.
+</p>
+<p>Examples of stubbed calls:</p>
+<ul>
+  <li>POST /auth/login — parent token or 401</li>
+  <li>POST /auth/doctor-login — schedule vs change-password</li>
+  <li>POST /registration — 201 plus MRN-101</li>
+  <li>GET /doctors/available — Meera Shah or an empty list</li>
+  <li>POST /appointments — APT-501</li>
+  <li>POST /doctors — staff id DOC099</li>
+</ul>
+<p>
+  Session is stored as <code>localStorage.pc_session</code>. AuthService reads that key.
+  Tests either log in through the UI, or write the session with <code>seedSession()</code>
+  so later pages can skip the login form. seedSession opens /login, then sets:
+</p>
+<pre>localStorage.setItem('pc_session', JSON.stringify({
+  token, role, userId, name, mustChangePassword
+}))</pre>
+
+<h2>6. Login page object</h2>
+<p>
+  tests/pages/login.page.ts wraps the login screen so auth tests use names like “choose Parent”
+  instead of repeating locators. Locators prefer roles and labels — the same names a person sees.
+</p>
+<pre>await login.goto();
+await login.login('Parent', '9876543210', 'Parent@123');
+await expect(page).toHaveURL(/\/guardian\/find-doctor/);</pre>
+<p>
+  Only login uses a page object. Other screens are clicked directly in the spec files with
+  getByRole, getByLabel, and getByPlaceholder.
+</p>
+
+<h2>7. The 29 tests, file by file</h2>
+<table>
+  <thead>
+    <tr><th>File</th><th>Count</th><th>What it proves</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>smoke.spec.ts</td>
+      <td>2</td>
+      <td>“/” and unknown URLs redirect to /login. The heading “Pedia Centre” and Parent / Doctor / Admin buttons exist.</td>
+    </tr>
+    <tr>
+      <td>auth.spec.ts</td>
+      <td>6</td>
+      <td>Parent mobile validation; bad password stays on login; parent goes to find-doctor; doctor goes to schedule; temp doctor goes to change-password; admin goes to /admin/doctors. Admin does not see “Create an account”.</td>
+    </tr>
+    <tr>
+      <td>register.spec.ts</td>
+      <td>4</td>
+      <td>Login and register links; empty form errors; add/remove Child 2; success screen shows MRN-101 from the mock.</td>
+    </tr>
+    <tr>
+      <td>access-control.spec.ts</td>
+      <td>4</td>
+      <td>Logged-out users are bounced from all three areas. A parent cannot open doctor or admin pages. A doctor cannot open guardian or admin pages. Log out clears access.</td>
+    </tr>
+    <tr>
+      <td>guardian.spec.ts</td>
+      <td>4</td>
+      <td>Find a doctor and reset filters; book slot 10:00 and see APT-501; list and cancel an appointment; treatment history for Aarav shows Viral fever / Paracetamol.</td>
+    </tr>
+    <tr>
+      <td>doctor.spec.ts</td>
+      <td>5</td>
+      <td>Schedule to history; search patients down to Anaya; add a treatment record; change password; forced password change hides clinical navigation.</td>
+    </tr>
+    <tr>
+      <td>admin.spec.ts</td>
+      <td>4</td>
+      <td>Search doctors; availability link redirects to the list; create doctor shows DOC099; assign a doctor to Aarav; create a user and reset a password.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>8. One test, step by step</h2>
+<p>Example: a parent books an appointment (guardian.spec.ts).</p>
+<ol>
+  <li>beforeEach calls mockBackend(page), then seedSession(page, 'guardian').</li>
+  <li>The test goes to /guardian/book/21. The role guard sees pc_session.role = guardian, so the page loads.</li>
+  <li>Angular requests doctor 21 and the children list. Playwright returns Dr Meera Shah and Aarav / Anaya.</li>
+  <li>The test selects child 101 and fills a date 7 days ahead. The app requests slots. The mock returns 10:00, 10:15, 11:00.</li>
+  <li>The test clicks 10:00, types “Fever”, and clicks Confirm booking.</li>
+  <li>POST /appointments is intercepted and returns 201 with APT-501. The UI shows “Appointment booked”.</li>
+  <li>Click “View my appointments”. The URL becomes /guardian/my-appointments.</li>
+</ol>
+<p class="note">
+  If the mock is wrong, the UI test fails. A 404 “Unmocked” path means the Angular service called an
+  endpoint the fake API does not know. A missing heading means the component did not render the JSON
+  that was returned.
+</p>
+
+<h2>9. What happens when you run the suite</h2>
+<ol>
+  <li>You run <code>npm run test:e2e</code>, which calls <code>playwright test</code>.</li>
+  <li>Playwright reads playwright.config.ts.</li>
+  <li>If port 4200 is down, it starts ng serve and waits.</li>
+  <li>It collects tests/e2e/*.spec.ts.</li>
+  <li>It runs them with one worker in Chrome and prints a list reporter.</li>
+</ol>
+<p>
+  Each test gets an isolated browser context: empty cookies and empty localStorage, unless the test
+  writes them. After the last test, Playwright writes playwright-report/. Failures also land under
+  test-results/ (screenshot, video, trace.zip).
+</p>
+
+<h2>10. Commands</h2>
+<p>Full suite:</p>
+<pre>npm run test:e2e
+npx playwright test</pre>
+<p>Interactive UI mode (pick a spec, step through actions):</p>
+<pre>npm run test:e2e:ui</pre>
+<p>One file or one test title:</p>
+<pre>npx playwright test tests/e2e/auth.spec.ts
+npx playwright test tests/e2e/guardian.spec.ts -g "books an appointment"</pre>
+<p>See the browser instead of headless:</p>
+<pre>npx playwright test --headed
+npx playwright test --debug</pre>
+<p>Last HTML report, and a failure trace:</p>
+<pre>npx playwright show-report
+npx playwright show-trace test-results/**/trace.zip</pre>
+<p>
+  Locally you can keep <code>ng serve</code> running in another terminal. reuseExistingServer is true,
+  so Playwright will not start a second Angular process. On CI, reuseExistingServer is false, retries
+  are 2, and the job must have Chrome (or the config must drop <code>channel: 'chrome'</code>).
+</p>
+
+<h2>11. How this maps to Angular routes</h2>
+<table>
+  <thead>
+    <tr><th>App route</th><th>Guard</th><th>Covered mainly by</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>/login, /register</td><td>public</td><td>smoke, auth, register</td></tr>
+    <tr><td>/guardian/find-doctor</td><td>roleGuard('guardian')</td><td>auth, guardian, access-control</td></tr>
+    <tr><td>/guardian/book/:doctorId</td><td>guardian</td><td>guardian.spec.ts</td></tr>
+    <tr><td>/guardian/my-appointments</td><td>guardian</td><td>guardian.spec.ts</td></tr>
+    <tr><td>/guardian/treatment-history</td><td>guardian</td><td>guardian.spec.ts</td></tr>
+    <tr><td>/doctor/schedule, patients, history, add-record</td><td>doctor + passwordChangedGuard</td><td>doctor.spec.ts, auth</td></tr>
+    <tr><td>/doctor/change-password</td><td>doctor</td><td>auth and doctor</td></tr>
+    <tr><td>/admin/doctors, /doctors/new, /patients, /users</td><td>roleGuard('admin')</td><td>admin.spec.ts, auth</td></tr>
+    <tr><td>/admin/doctors/:id/availability</td><td>redirects to list</td><td>admin.spec.ts</td></tr>
+    <tr><td>unknown path</td><td>** → login</td><td>smoke.spec.ts</td></tr>
+  </tbody>
+</table>
+
+<h2>12. How Playwright was introduced, in order</h2>
+<ol>
+  <li>Installed @playwright/test as a devDependency.</li>
+  <li>Installed the Chrome channel Playwright drives.</li>
+  <li>Added playwright.config.ts with baseURL port 4200 and webServer = npm start.</li>
+  <li>Created tests/helpers: fixtures, jwt, session, then the route mock so every spec can call mockBackend(page).</li>
+  <li>Created a small LoginPage for the three-role sign-in screen.</li>
+  <li>Wrote specs in product order: smoke, auth, register, guards, guardian, doctor, admin.</li>
+  <li>Wired npm run test:e2e and test:e2e:ui.</li>
+  <li>Ignored report folders in .gitignore.</li>
+</ol>
+<p>
+  Mental model: Playwright is a remote control for Chrome. Angular is the app. mocks.ts is a pretend
+  FastAPI sitting inside the browser. fixtures.ts is the clinic’s sample data. session.ts is a fake
+  already-logged-in session. Spec files are the scripts that pretend to be Parent, Doctor, or Admin.
+</p>
+
+<h2>13. Cheat sheet</h2>
+<p>On a new machine:</p>
+<pre>npm install
+npx playwright install chrome
+npm run test:e2e</pre>
+<p>
+  You do not need the backend. Only Node, npm packages, Chrome, and a working ng serve are required.
+  When a test is red: read the terminal error, then the screenshot in test-results/, then the HTML
+  report, then the trace viewer. If the error says Unmocked, extend mocks.ts.
+</p>
+
+</body>
+</html>

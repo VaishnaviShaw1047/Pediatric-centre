@@ -34,7 +34,8 @@ import { DoctorSummary, PatientSummary } from '../core/models';
 
             @if (assigning() === p.patient_id) {
               <div class="assign">
-                <select #d>
+                <!-- changed here during debug -->
+                <select #d (change)="onDoctorChange(d.value)">
                   <option value="">Choose a doctor</option>
                   @for (doc of doctors(); track doc.doctor_id) {
                     <option [value]="doc.doctor_id">Dr. {{ doc.first_name }} {{ doc.last_name }} ({{ doc.specialty }})</option>
@@ -126,6 +127,10 @@ export class ManagePatients implements OnInit {
       },
     });
   }
+   onDoctorChange(value: string) {
+  console.log('Selected doctor:', value);
+  debugger;
+}
 
   assign(patient: PatientSummary, doctorId: string) {
     this.error.set(null);
@@ -138,4 +143,5 @@ export class ManagePatients implements OnInit {
       error: (e: HttpErrorResponse) => this.error.set(errorMessage(e, 'Could not assign the doctor.')),
     });
   }
+ 
 }
